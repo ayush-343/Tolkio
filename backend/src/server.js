@@ -21,10 +21,24 @@ const PORT = process.env.PORT || 3000;
 
 
 // it allows the frontend to send the cookies
-app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true // allow frontend to send the cookies
-}));
+// Allow local frontend dev servers and an optional FRONTEND_URL env var used in production
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:5174",
+].filter(Boolean);
+
+app.use(
+    cors({
+        origin: (origin, cb) => {
+            // allow requests with no origin (mobile apps, curl, same-origin)
+            if (!origin) return cb(null, true);
+            if (allowedOrigins.includes(origin)) return cb(null, true);
+            return cb(new Error("CORS not allowed"));
+        },
+        credentials: true, // allow frontend to send the cookies
+    })
+);
 
 app.use(express.json());
 

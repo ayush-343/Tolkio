@@ -5,3 +5,6 @@
 //     httpOnly: true,  //prevent XSS attacks
 // })
 
+//TODO: Implement dicebear.com Avatars for random profile pics
+// nextjs priority for image optimization
+// nextjs priority for image
