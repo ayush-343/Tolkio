@@ -14,6 +14,7 @@ import {
   Thread,
   Window,
 } from "stream-chat-react";
+import "stream-chat-react/dist/css/v2/index.css";
 import { StreamChat } from "stream-chat";
 import toast from "react-hot-toast";
 import { connectStreamUser, disconnectStreamClient } from "../lib/stream";
@@ -154,7 +155,7 @@ const ChatPage = () => {
         text: `I've started a video call! Join me here: ${callUrl}`,
       });
       console.log("Initiate video call at:", callUrl);
-      toast.error("Video call link sent in chat (not implemented).");
+      toast.error("Video call link sent in chat");
     }
   };
 

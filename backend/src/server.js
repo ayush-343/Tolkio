@@ -1,6 +1,5 @@
 import express from 'express';
 import dotenv from "dotenv";
-import mongoose from 'mongoose';
 
 import cookieParser from "cookie-parser";
 
@@ -10,6 +9,7 @@ import userRoutes from './routes/user.route.js';
 import chatRoutes from './routes/chat.route.js';
 
 import cors from 'cors';
+import path from 'path';
 
 
 import { connectDB } from './lib/db.js';
@@ -18,6 +18,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const __dirname = path.resolve(); // to get the current directory name
 
 
 // it allows the frontend to send the cookies
@@ -30,12 +32,7 @@ const allowedOrigins = [
 
 app.use(
     cors({
-        origin: (origin, cb) => {
-            // allow requests with no origin (mobile apps, curl, same-origin)
-            if (!origin) return cb(null, true);
-            if (allowedOrigins.includes(origin)) return cb(null, true);
-            return cb(new Error("CORS not allowed"));
-        },
+        origin: "http://localhost:5173", // allow local dev server
         credentials: true, // allow frontend to send the cookies
     })
 );
@@ -48,6 +45,14 @@ app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/chat", chatRoutes)
 
+// Serve static files from the frontend's dist directory
+if (process.env.NODE_ENV === "production") {
+    app.use(express.static(path.join(__dirname, "../frontend/dist")));
+    // For any routes (above) not handled by the API, serve the frontend's index.html
+    app.get("*", (req, res) => {
+        res.sendFile(path.join(__dirname, "../frontend/", "dist", "index.html"));
+    });
+}
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

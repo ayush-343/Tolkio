@@ -1,9 +1,9 @@
 import axios from "axios";
 
-// Prefer an explicit VITE_API_URL, fall back to localhost:3000 which the backend uses by default.
-const BASE_API = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api";
+// Use different base URLs for development and production
+const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api";
 
 export const axiosInstance = axios.create({
-    baseURL: BASE_API,
+    baseURL: BASE_URL,
     withCredentials: true // send cookies (jwt) with requests
 });
