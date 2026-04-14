@@ -5,6 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    hmr: {
+      host: 'localhost',
+      port: 5173,
+      protocol: 'ws',
+    },
     // Proxy API requests during development to the backend server so that
     // the browser sees a same-origin request and cookies (jwt) will be
     // stored/sent correctly while running Vite on a different port.

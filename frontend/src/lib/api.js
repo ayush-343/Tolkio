@@ -19,13 +19,14 @@ export const signup = async (signupData) => {
 
 export const getAuthUser = async () => {
     try {
-        
-    const response = await axiosInstance.get("/auth/me");
-    return response.data;
+        const response = await axiosInstance.get("/auth/me");
+        return response.data;
     } catch (error) {
+        if (error.response && error.response.status === 401) {
+            return null; // Silent catch for 401 when user is just not logged in
+        }
         console.error("Error fetching auth user:", error);
-        return null; //if there is an error, we return null
-        
+        return null;
     }
 };
 

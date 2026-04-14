@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { DraftingCompass } from "lucide-react";
 import { Link } from "react-router"; // <-- FIXED IMPORT
-import login_img from "../../public/Halloween_video_call-amico.png";
 import useLogin from "../hooks/useLogin";
 
 const LoginPage = () => {
@@ -118,7 +117,7 @@ const LoginPage = () => {
             {/* Illustration */}
             <div className="relative aspect-square max-w-sm mx-auto">
               <img
-                src={login_img}
+                src="/Halloween_video_call-amico.png"
                 alt="Login Illustration"
                 className="w-full h-full object-cover"
               />

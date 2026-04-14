@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { DraftingCompass } from "lucide-react";
 import { Link } from "react-router";
-import signup_gif from "../../public/Halloween_video_call-amico.png";
 
 import useSignup from "../hooks/useSignup";
 
@@ -174,7 +173,7 @@ const SignUpPage = () => {
             {/* Illustration */}
             <div className="relative aspect-square max-w-sm mx-auto">
               <img
-                src={signup_gif}
+                src="/Halloween_video_call-amico.png"
                 alt="Sign up animation"
                 className="w-full h-full"
               />

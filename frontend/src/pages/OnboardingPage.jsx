@@ -21,6 +21,7 @@ const OnboardingPage = () => {
   const [formState, setFormState] = React.useState({
     fullName: authUser?.fullName || "",
     bio: authUser?.bio || "",
+    gender: authUser?.gender || "",
     nativeLanguage: authUser?.nativeLanguage || "",
     learningLanguage: authUser?.learningLanguage || "",
     location: authUser?.location || "",
@@ -49,8 +50,23 @@ const OnboardingPage = () => {
 
   // Handle random avatar generation
   const handleRandomAvatar = () => {
-    const idx = Math.floor(Math.random() * 100) + 1;
-    const randomAvatar = `https://avatar.iran.liara.run/public/${idx}.png`;
+    if (!formState.gender) {
+      toast.error("Please select your gender first!");
+      return;
+    }
+
+    let idx;
+    let category;
+
+    if (formState.gender === "male") {
+      idx = Math.floor(Math.random() * 50) + 1;
+      category = "boy";
+    } else {
+      idx = Math.floor(Math.random() * 50) + 51;
+      category = "girl";
+    }
+
+    const randomAvatar = `/avatars/${category}/AV${idx}.png`;
     setFormState({
       ...formState,
       profilePic: randomAvatar,
@@ -111,6 +127,28 @@ const OnboardingPage = () => {
                   placeholder="Your full name"
                   required
                 />
+              </div>
+              {/* GENDER */}
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Gender</span>
+                </label>
+                <select
+                  name="gender"
+                  value={formState.gender}
+                  onChange={(e) =>
+                    setFormState({
+                      ...formState,
+                      gender: e.target.value,
+                    })
+                  }
+                  className="select select-bordered w-full"
+                  required
+                >
+                  <option value="">Select your gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
               </div>
               {/* BIO */}
               <div className="form-control">
@@ -206,7 +244,7 @@ const OnboardingPage = () => {
               {/* SUBMIT BTN */}
               <button
                 className="btn btn-primary w-full"
-                disabled={isPending}
+                disabled={isPending || !formState.gender}
                 type="submit"
               >
                 {!isPending ? (

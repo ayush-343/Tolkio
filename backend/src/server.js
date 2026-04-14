@@ -32,7 +32,7 @@ const allowedOrigins = [
 
 app.use(
     cors({
-        origin: "http://localhost:5173", // allow local dev server
+        origin: ["http://localhost:5173", "http://localhost:5174"], // allow local dev servers
         credentials: true, // allow frontend to send the cookies
     })
 );
