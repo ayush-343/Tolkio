@@ -2,7 +2,8 @@ import express from 'express';
 import dotenv from "dotenv";
 
 import cookieParser from "cookie-parser";
-
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 
 import authRoutes from './routes/auth.route.js';
 import userRoutes from './routes/user.route.js';
@@ -18,6 +19,20 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Security: Hide X-Powered-By header
+app.disable('x-powered-by');
+
+// Security: Helmet for security headers (helps with some CSRF/XSS warnings from scanners too)
+app.use(helmet());
+
+// Security: Rate limiting to prevent Brute force / DDoS
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: { message: "Too many requests from this IP, please try again later." }
+});
+app.use('/api', apiLimiter);
 
 const __dirname = path.resolve(); // to get the current directory name
 
@@ -37,7 +52,8 @@ app.use(
     })
 );
 
-app.use(express.json());
+// Security: Prevent resource exhaustion by limiting JSON body payload size
+app.use(express.json({ limit: '10kb' }));
 
 app.use(cookieParser());
 

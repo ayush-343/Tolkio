@@ -71,12 +71,29 @@ const NotificationsPage = () => {
                               {request.sender.fullName}
                             </h3>
                             <div className="flex flex-wrap gap-1.5 mt-1">
-                              <span className="badge badge-secondary badge-sm">
-                                Native: {request.sender.nativeLanguage}
-                              </span>
-                              <span className="badge badge-outline badge-sm">
-                                Learning: {request.sender.learningLanguage}
-                              </span>
+                              {request.sender.nativeLanguages && request.sender.nativeLanguages.length > 0 ? (
+                                request.sender.nativeLanguages.map((langObj, idx) => (
+                                  <span key={`native-${idx}`} className="badge badge-secondary badge-sm">
+                                    Native: {langObj.language}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="badge badge-secondary badge-sm">
+                                  Native: {request.sender.nativeLanguage}
+                                </span>
+                              )}
+
+                              {request.sender.learningLanguages && request.sender.learningLanguages.length > 0 ? (
+                                request.sender.learningLanguages.map((langObj, idx) => (
+                                  <span key={`learning-${idx}`} className="badge badge-outline badge-sm">
+                                    Learning: {langObj.language}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="badge badge-outline badge-sm">
+                                  Learning: {request.sender.learningLanguage}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <button

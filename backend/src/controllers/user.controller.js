@@ -14,7 +14,7 @@ export async function getRecommendedUsers(req, res) {
                 { isOnboarded: true }, //only show Onboarded users
             ]
         })
-        res.status(200).json({recommendedUsers})
+        res.status(200).json({ recommendedUsers })
     } catch (error) {
         console.error("Error in getRecommendedUsers controller", error.message);
         res.status(500).json({ message: "Internal server error" });
@@ -26,11 +26,11 @@ export async function getMyFriends(req, res) {
     try {
         const user = await User.findById(req.user.id)
             .select("friends")
-            .populate("friends", "fullName profilePic nativeLanguage learningLanguage "); // populate the friends with their details
+            .populate("friends", "fullName profilePic nativeLanguage learningLanguage nativeLanguages learningLanguages"); // populate the friends with their details
         res.status(200).json(user.friends);
     } catch (error) {
         console.error("Error in getMyFriends controller", error.message);
-        res.status(500).json({message: "Internal S"})
+        res.status(500).json({ message: "Internal S" })
 
     }
 
@@ -65,8 +65,8 @@ export async function sendFriendRequest(req, res) {
 
         // check if a request already exists
         const existingRequest = await FriendRequest.findOne({
-            $or :[{sender: myId, recipient: recipientId}, 
-                { sender: recipientId, recipient: myId }],
+            $or: [{ sender: myId, recipient: recipientId },
+            { sender: recipientId, recipient: myId }],
         })
         if (existingRequest) {
             return res
@@ -141,14 +141,14 @@ export async function getFriendRequest(req, res) {
         const incomingReqs = await FriendRequest.find({
             recipient: req.user.id,
             status: "pending",
-        }).populate("sender", "fullName profilePic nativeLanguage learningLanguage");
+        }).populate("sender", "fullName profilePic nativeLanguage learningLanguage nativeLanguages learningLanguages");
 
 
         // Fetch the accepted requests
         const acceptedReqs = await FriendRequest.find({
             recipient: req.user.id,
             status: "accepted",
-        }).populate("recipient", "fullName profilePic nativeLanguage learningLanguage");
+        }).populate("recipient", "fullName profilePic nativeLanguage learningLanguage nativeLanguages learningLanguages");
 
         res.status(200).json({ incomingReqs, acceptedReqs });
 
@@ -164,12 +164,89 @@ export async function getOutgoingFriendRequests(req, res) {
         const outgoingReqs = await FriendRequest.find({
             sender: req.user.id,
             status: "pending",
-        }).populate("recipient", "fullName profilePic nativeLanguage learningLanguage");
+        }).populate("recipient", "fullName profilePic nativeLanguage learningLanguage nativeLanguages learningLanguages");
 
         res.status(200).json({ outgoingReqs });
 
     } catch (error) {
         console.error("Error in getOutgoingFriendRequests controller", error.message);
         res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export async function declineFriendRequest(req, res) {
+    try {
+        const { id: requestId } = req.params;
+
+        const friendRequest = await FriendRequest.findById(requestId);
+
+        if (!friendRequest) {
+            return res.status(404).json({ message: "Friend request not found" });
+        }
+
+        if (friendRequest.recipient.toString() !== req.user.id) {
+            return res.status(403).json({ message: "You are not authorized to decline this friend request" });
+        }
+
+        friendRequest.status = "rejected";
+        await friendRequest.save();
+
+        await FriendRequest.findByIdAndDelete(requestId);
+
+        res.status(200).json({ message: "Friend request declined successfully" });
+    } catch (error) {
+        console.error("Error in declineFriendRequest controller", error.message);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export async function updateProfile(req, res) {
+    try {
+        const { fullName, username, email, password, profilePic, nativeLanguage, nativeProficiency, learningLanguage, learningProficiency, nativeLanguages, learningLanguages } = req.body;
+        const userId = req.user.id;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (fullName !== undefined) user.fullName = fullName;
+
+        // Handle empty strings for sparse unique field
+        if (username !== undefined) {
+            user.username = username === "" ? undefined : username;
+        }
+
+        if (email !== undefined) user.email = email;
+
+        if (password) {
+            if (password.length < 6) {
+                return res.status(400).json({ message: "Password must be at least 6 characters long." });
+            }
+            user.password = password;
+        }
+
+        if (profilePic !== undefined) user.profilePic = profilePic;
+        if (nativeLanguage !== undefined) user.nativeLanguage = nativeLanguage;
+        if (nativeProficiency !== undefined) user.nativeProficiency = nativeProficiency;
+        if (learningLanguage !== undefined) user.learningLanguage = learningLanguage;
+        if (learningProficiency !== undefined) user.learningProficiency = learningProficiency;
+
+        if (nativeLanguages !== undefined) user.nativeLanguages = nativeLanguages;
+        if (learningLanguages !== undefined) user.learningLanguages = learningLanguages;
+
+        await user.save();
+
+        const updatedUser = await User.findById(userId).select("-password");
+
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error("Error in updateProfile controller:", error.message);
+
+        // Send duplicate key error or validation error back
+        if (error.code === 11000) {
+            return res.status(400).json({ message: "Username or email is already taken" });
+        }
+        res.status(500).json({ message: error.message || "Internal server error" });
     }
 }

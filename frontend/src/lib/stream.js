@@ -25,6 +25,13 @@ export async function connectStreamUser(apiKey, user, token) {
     }
     // reset the client instance to avoid stale state
     client = StreamChat.getInstance(apiKey);
+  } else if (!connectedUserId) {
+    // just fallback client if not connected
+    const existingUser = c.user;
+    if (existingUser && (existingUser.id === userId || existingUser._id === userId)) {
+        connectedUserId = userId;
+        return c;
+    }
   }
 
   await c.connectUser({ id: userId, name: user.fullName, image: user.avatarUrl }, token);

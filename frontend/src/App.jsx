@@ -7,6 +7,8 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import CallPage from "./pages/CallPage.jsx";
 import ChatPage from "./pages/ChatPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
+import SettingsPage from "./pages/SettingsPage.jsx";
+import FriendsPage from "./pages/FriendsPage.jsx";
 
 import { Toaster } from "react-hot-toast";
 
@@ -25,7 +27,10 @@ const App = () => {
   if (isLoading) return <PageLoader />;
 
   return (
-    <div className="h-screen" data-theme={theme}>
+    <div
+      className="min-h-screen bg-base-100 text-base-content transition-colors duration-200"
+      data-theme={theme}
+    >
       <Routes>
         <Route
           path="/"
@@ -88,6 +93,32 @@ const App = () => {
             isAuthenticated && isOnboarded ? (
               <Layout showSidebar={false}>
                 <ChatPage />
+              </Layout>
+            ) : (
+              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
+            )
+          }
+        />
+
+        <Route
+          path="/friends"
+          element={
+            isAuthenticated && isOnboarded ? (
+              <Layout showSidebar={true}>
+                <FriendsPage />
+              </Layout>
+            ) : (
+              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
+            )
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            isAuthenticated && isOnboarded ? (
+              <Layout showSidebar={true}>
+                <SettingsPage />
               </Layout>
             ) : (
               <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />

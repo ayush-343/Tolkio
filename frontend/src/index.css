@@ -2,87 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 
+  Map DaisyUI color variables to Stream Chat's UI dynamically. 
+  DaisyUI uses OKLCH, so we wrap the variables in oklch(). 
+*/
+.str-chat {
+  /* Background colors */
+  --str-chat__background-color: transparent;
+  --str-chat__surface-color: transparent;
+  --str-chat__message-textarea-background-color: oklch(var(--b2));
+
+  /* App Primary Colors */
+  --str-chat__primary-color: oklch(var(--p));
+  --str-chat__active-primary-color: oklch(var(--pf, var(--p)));
+
+  /* Text Colors */
+  --str-chat__text-color: oklch(var(--bc));
+  --str-chat__secondary-text-color: oklch(var(--bc) / 0.7);
+  --str-chat__message-text-color: oklch(var(--bc));
+
+  /* Borders & Shadows */
+  --str-chat__border-color: oklch(var(--bc) / 0.1);
+  --str-chat__border-radius: var(--rounded-box, 0.5rem);
+  --str-chat__box-shadow: none;
+}
+
+/* Base structural fixes to allow theme backgrounds to shine through */
 .str-chat__channel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Allow the site theme (data-theme) to show through instead of forcing a gradient */
-  background: transparent;
   height: 100%;
 }
 
 .str-chat__container {
-  max-width: 2000px;
   width: 100%;
   height: 100% !important;
   margin: 0 auto !important;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid oklch(var(--bc) / 0.1) !important;
+  background-color: oklch(var(--b1)) !important;
+  box-shadow: none;
   overflow: hidden;
-  /* inherit background from the page/theme */
-  background-color: transparent;
-  color: inherit;
 }
 
+/* Ensure the message list blends nicely */
 .str-chat__list {
-  /* don't force white — inherit the theme background so Coffee (or any selected theme) applies */
-  background-color: transparent;
+  background-color: transparent !important;
   padding: 12px;
-  color: inherit;
 }
 
 .str-chat__list-notifications {
   display: none;
 }
 
+/* Customize my messages vs their messages using DaisyUI vars */
+.str-chat__message--me .str-chat__message-bubble {
+  background-color: oklch(var(--p)) !important;
+  color: oklch(var(--pc)) !important;
+}
+
+.str-chat__message--regular .str-chat__message-bubble {
+  background-color: oklch(var(--b2)) !important;
+  color: oklch(var(--bc)) !important;
+}
+
+/* Input box & Header borders */
 .str-chat__message-input {
-  /* Keep a subtle divider but allow color contrast from the theme */
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-/* Make Stream Chat UI inherit the app/data-theme colors (prevents forced white bubbles/input) */
-.str-chat__message,
-.str-chat__message--me,
-.str-chat__message--simple,
-.str-chat__message-inner,
-.str-chat__message-text,
-.str-chat__message-attachments,
-.str-chat__message-actions,
-.str-chat__message-reaction,
-.str-chat__message-list,
-.str-chat__message-list .str-chat__message,
-.str-chat__message-list .str-chat__message * {
   background-color: transparent !important;
-  color: inherit !important;
+  border-top: 1px solid oklch(var(--bc) / 0.1) !important;
 }
 
-/* Make the input area follow the site theme (subtle border for separation) */
-.str-chat__message-input,
-.str-chat__input,
-.str-chat__input textarea,
-.str-chat__input .str-chat__message-input__textarea {
-  background-color: transparent !important;
-  color: inherit !important;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  /* for dark themes you may prefer a lighter divider: */
-  /* border: 1px solid rgba(255,255,255,0.06); */
+.str-chat__input textarea {
+  background-color: oklch(var(--b1)) !important;
+  color: oklch(var(--bc)) !important;
+  border: 1px solid oklch(var(--bc) / 0.2) !important;
 }
 
-/* Channel header / top bar */
-.str-chat__channel-header,
-.str-chat__header,
+.str-chat__channel-header {
+  background-color: transparent !important;
+  border-bottom: 1px solid oklch(var(--bc) / 0.1) !important;
+}
+
+/* Remove default white backgrounds from header titles/actions */
 .str-chat__channel-header__title,
 .str-chat__channel-header__title * {
   background-color: transparent !important;
-  color: inherit !important;
+  color: oklch(var(--bc)) !important;
 }
-.str-chat__channel-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-/* for dark themes you may prefer a lighter divider: */
-.str-chat__channel-header {
-  border-bottom: 2px solid rgba(255, 255, 255, 0.06);
-}
-/* for light themes you may prefer a lighter divider: */
-/* .str-chat__channel-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-} */

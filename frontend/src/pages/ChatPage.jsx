@@ -40,7 +40,7 @@ const ChatPage = () => {
   // Assumption: themes like 'dark', 'night', 'dracula', 'black', 'business', 'forest' are visually dark.
   // All other themes default to the light variant. Adjust the list if you use other dark theme names.
   const streamTheme = (() => {
-    if (!theme) return "messaging light";
+    if (!theme) return "str-chat__theme-light";
     const t = String(theme).toLowerCase();
     const darkThemes = new Set([
       "dark",
@@ -50,8 +50,8 @@ const ChatPage = () => {
       "business",
       "forest",
     ]);
-    if (darkThemes.has(t) || t.includes("dark")) return "messaging dark";
-    return "messaging light";
+    if (darkThemes.has(t) || t.includes("dark")) return "str-chat__theme-dark";
+    return "str-chat__theme-light";
   })();
 
   const { data: tokenData, isLoading: tokenLoading } = useQuery({
@@ -86,7 +86,7 @@ const ChatPage = () => {
         const client = await connectStreamUser(
           STREAM_API_KEY,
           authUser,
-          tokenData.token
+          tokenData.token,
         );
 
         // Create or get a channel ID between the two users
@@ -103,7 +103,7 @@ const ChatPage = () => {
         } catch (watchErr) {
           console.error(
             "channel.watch failed, attempting one reconnect:",
-            watchErr
+            watchErr,
           );
           // If the error is due to token/connection, try reconnect once
           try {
@@ -115,7 +115,7 @@ const ChatPage = () => {
                 name: authUser.fullName,
                 image: authUser.avatarUrl,
               },
-              tokenData.token
+              tokenData.token,
             );
             // Recreate the channel using the reconnected client
             currentChannel = client.channel("messaging", channelId, {
@@ -139,10 +139,10 @@ const ChatPage = () => {
       }
     };
     initChat();
-    // cleanup on unmount: disconnect if possible and reset the init flag
+    // cleanup on unmount for this effect
     return () => {
-      // use central helper to cleanup
-      disconnectStreamClient().catch(() => {});
+      // Do not globally disconnect the client here to avoid race conditions during fast navigation.
+      // Disconnection should happen on logout.
     };
   }, [tokenData, authUser, id, tokenLoading]);
 

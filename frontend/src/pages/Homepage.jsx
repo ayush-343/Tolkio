@@ -156,14 +156,33 @@ const HomePage = () => {
 
                       {/* LANGUAGES WITH FLAGS */}
                       <div className="flex flex-wrap gap-2">
-                        <span className="badge badge-secondary">
-                          {getLanguageFlag(user.nativeLanguage)} Native:{" "}
-                          {capitalize(user.nativeLanguage)}
-                        </span>
-                        <span className="badge badge-outline">
-                          {getLanguageFlag(user.learningLanguage)} Learning:{" "}
-                          {capitalize(user.learningLanguage)}
-                        </span>
+                        {user.nativeLanguages && user.nativeLanguages.length > 0 ? (
+                          user.nativeLanguages.map((langObj, i) => (
+                            <span key={`native-${i}`} className="badge badge-secondary">
+                              {getLanguageFlag(langObj.language)} Native:{" "}
+                              {capitalize(langObj.language)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="badge badge-secondary">
+                            {getLanguageFlag(user.nativeLanguage)} Native:{" "}
+                            {capitalize(user.nativeLanguage)}
+                          </span>
+                        )}
+
+                        {user.learningLanguages && user.learningLanguages.length > 0 ? (
+                          user.learningLanguages.map((langObj, i) => (
+                            <span key={`learning-${i}`} className="badge badge-outline">
+                              {getLanguageFlag(langObj.language)} Learning:{" "}
+                              {capitalize(langObj.language)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="badge badge-outline">
+                            {getLanguageFlag(user.learningLanguage)} Learning:{" "}
+                            {capitalize(user.learningLanguage)}
+                          </span>
+                        )}
                       </div>
 
                       {/* USER BIO */}
