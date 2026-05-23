@@ -24,7 +24,23 @@ const PORT = process.env.PORT || 3000;
 app.disable('x-powered-by');
 
 // Security: Helmet for security headers (helps with some CSRF/XSS warnings from scanners too)
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "img-src": ["'self'", "data:", "https://flagcdn.com", "https://*.stream-io-cdn.com"],
+        "connect-src": [
+          "'self'",
+          "https://*.stream-io-api.com",
+          "wss://*.stream-io-api.com",
+          "https://*.getstream.io",
+          "wss://*.getstream.io",
+        ],
+      },
+    },
+  })
+);
 
 // Security: Rate limiting to prevent Brute force / DDoS
 const apiLimiter = rateLimit({
