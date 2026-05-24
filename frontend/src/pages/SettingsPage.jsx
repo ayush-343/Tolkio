@@ -5,6 +5,10 @@ import {
   ShuffleIcon,
   EyeIcon,
   EyeOffIcon,
+  BellIcon,
+  BellOffIcon,
+  CheckCircleIcon,
+  SmartphoneIcon,
 } from "lucide-react";
 import useAuthUser from "../hooks/useAuthUser";
 import { axiosInstance } from "../lib/axios";
@@ -13,6 +17,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LANGUAGES } from "../constants";
 import { getLanguageFlag } from "../lib/flags.jsx";
 import { capitalize } from "../lib/utils.js";
+import {
+  isPushSupported,
+  getNotificationPermission,
+  requestPermissionAndSubscribe,
+} from "../lib/push";
 
 const SettingsPage = () => {
   const { authUser } = useAuthUser();
@@ -35,6 +44,29 @@ const SettingsPage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Notification permission state
+  const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+  const [isEnablingNotifs, setIsEnablingNotifs] = useState(false);
+  const pushSupported = isPushSupported();
+
+  const handleEnableNotifications = async () => {
+    setIsEnablingNotifs(true);
+    try {
+      const sub = await requestPermissionAndSubscribe();
+      setNotifPermission(getNotificationPermission());
+      if (sub) {
+        toast.success("Notifications enabled successfully!");
+      } else if (getNotificationPermission() === "denied") {
+        toast.error("Notification permission was denied. Please enable it in your browser settings.");
+      }
+    } catch (err) {
+      console.error("Failed to enable notifications:", err);
+      toast.error("Failed to enable notifications.");
+    } finally {
+      setIsEnablingNotifs(false);
+    }
+  };
 
   useEffect(() => {
     if (authUser) {
@@ -451,6 +483,84 @@ const SettingsPage = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notification Preferences Card */}
+        <div className="card bg-base-200 shadow-sm border border-base-300">
+          <div className="card-body p-6">
+            <h3 className="card-title text-lg border-b border-base-300 pb-4 mb-4">
+              <BellIcon size={20} className="mr-1" /> Notifications
+            </h3>
+
+            <div className="space-y-4">
+              {/* Current Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-base-content/70">Status</span>
+                {notifPermission === "granted" ? (
+                  <span className="badge badge-success gap-1">
+                    <CheckCircleIcon size={14} /> Enabled
+                  </span>
+                ) : notifPermission === "denied" ? (
+                  <span className="badge badge-error gap-1">
+                    <BellOffIcon size={14} /> Blocked
+                  </span>
+                ) : notifPermission === "unsupported" ? (
+                  <span className="badge badge-warning gap-1">
+                    Not Supported
+                  </span>
+                ) : (
+                  <span className="badge badge-ghost gap-1">
+                    Not Enabled
+                  </span>
+                )}
+              </div>
+
+              {/* Enable Button */}
+              {pushSupported && notifPermission !== "granted" && notifPermission !== "denied" && (
+                <button
+                  className="btn btn-primary btn-sm w-full"
+                  onClick={handleEnableNotifications}
+                  disabled={isEnablingNotifs}
+                >
+                  {isEnablingNotifs ? (
+                    <><span className="loading loading-spinner loading-xs"></span> Enabling...</>
+                  ) : (
+                    <><BellIcon size={16} /> Enable Call Notifications</>
+                  )}
+                </button>
+              )}
+
+              {/* Denied — show instructions */}
+              {notifPermission === "denied" && (
+                <p className="text-xs text-base-content/50">
+                  You previously blocked notifications. To re-enable, go to your browser's site settings and allow notifications for this site.
+                </p>
+              )}
+
+              {/* iOS / PWA Guidance */}
+              <div className="bg-base-300/50 rounded-lg p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <SmartphoneIcon size={16} className="text-info mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-base-content/80">iPhone / iPad Users</p>
+                    <p className="text-xs text-base-content/50 mt-1">
+                      To receive call notifications when the app is closed:
+                    </p>
+                    <ol className="text-xs text-base-content/50 mt-1 list-decimal list-inside space-y-0.5">
+                      <li>Tap the <strong>Share</strong> button in Safari</li>
+                      <li>Select <strong>"Add to Home Screen"</strong></li>
+                      <li>Open Talkio from your Home Screen</li>
+                      <li>Tap <strong>"Enable Call Notifications"</strong> above</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-base-content/40">
+                Notifications let you receive incoming call alerts even when the browser or tab is closed.
+              </p>
             </div>
           </div>
         </div>
