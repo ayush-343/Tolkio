@@ -26,29 +26,39 @@ const IncomingCallModal = ({ call, onAccept, onReject }) => {
 
       const ctx = new AudioCtx();
       let intervalId;
+      let timeoutId;
 
       const playRingTone = () => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 440;
-        gain.gain.value = 0.15;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        if (ctx.state === "closed") return;
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 440;
+          gain.gain.value = 0.15;
+          osc.start();
+          osc.stop(ctx.currentTime + 0.3);
+        } catch (e) {
+          // Ignore audio creation errors on closed contexts
+        }
       };
 
       // Ring pattern: two short beeps every 2 seconds
       playRingTone();
       intervalId = setInterval(() => {
+        if (ctx.state === "closed") return;
         playRingTone();
-        setTimeout(() => playRingTone(), 350);
+        timeoutId = setTimeout(() => {
+          playRingTone();
+        }, 350);
       }, 2000);
 
-      ringtoneRef.current = { ctx, intervalId };
+      ringtoneRef.current = { ctx, intervalId, timeoutId };
 
       return () => {
         clearInterval(intervalId);
+        clearTimeout(timeoutId);
         ctx.close().catch(() => {});
       };
     } catch {
@@ -60,6 +70,7 @@ const IncomingCallModal = ({ call, onAccept, onReject }) => {
     // Stop ringtone
     if (ringtoneRef.current) {
       clearInterval(ringtoneRef.current.intervalId);
+      clearTimeout(ringtoneRef.current.timeoutId);
       ringtoneRef.current.ctx.close().catch(() => {});
     }
     onAccept?.(call, isAudioOnly);
@@ -69,6 +80,7 @@ const IncomingCallModal = ({ call, onAccept, onReject }) => {
     // Stop ringtone
     if (ringtoneRef.current) {
       clearInterval(ringtoneRef.current.intervalId);
+      clearTimeout(ringtoneRef.current.timeoutId);
       ringtoneRef.current.ctx.close().catch(() => {});
     }
     onReject?.(call);
