@@ -1,5 +1,14 @@
 // Service Worker for Talkio Push Notifications
 
+// Take control of all pages immediately (important for iOS PWA)
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
@@ -9,10 +18,10 @@ self.addEventListener("push", (event) => {
 
     const options = {
       body: body || "You have an incoming call.",
-      icon: "/vite.svg", // Fallback to app icon
-      badge: "/vite.svg",
+      icon: "/icon-512.png",
+      badge: "/icon-512.png",
       tag: "talkio-call",
-      renameRequired: true,
+      renotify: true,
       requireInteraction: true, // Keep notification active until user interacts
       data: data || {},
       actions: [
@@ -25,7 +34,14 @@ self.addEventListener("push", (event) => {
       self.registration.showNotification(title || "Incoming Call", options)
     );
   } catch (error) {
-    console.error("Error processing push notification:", error);
+    // Fallback for non-JSON payloads
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification("Talkio", {
+        body: text || "You have a notification.",
+        icon: "/icon-512.png",
+      })
+    );
   }
 });
 
@@ -46,9 +62,11 @@ self.addEventListener("notificationclick", (event) => {
   const audioOnly = data?.audioOnly ? "true" : "false";
   const callerId = data?.callerId;
 
-  if (!callId || !callerId) return;
-
-  const targetUrl = `${self.location.origin}/chat/${callerId}?joinCallId=${callId}&audioOnly=${audioOnly}`;
+  // Build the target URL
+  let targetUrl = self.location.origin;
+  if (callId && callerId) {
+    targetUrl = `${self.location.origin}/chat/${callerId}?joinCallId=${callId}&audioOnly=${audioOnly}`;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {

@@ -41,9 +41,19 @@ app.use(
           "wss://video.stream-io-api.com",
           "https://*.stream-io-video.com",
           "wss://*.stream-io-video.com",
+          // Push notification endpoints (various browser push services)
+          "https://*.push.apple.com",
+          "https://fcm.googleapis.com",
+          "https://updates.push.services.mozilla.com",
         ],
         // Allow inline media for video calling
         "media-src": ["'self'", "blob:", "https://*.stream-io-cdn.com"],
+        // Allow service worker registration
+        "worker-src": ["'self'"],
+        // Allow push notification popups
+        "child-src": ["'self'", "blob:"],
+        // Allow manifest.json to be loaded
+        "manifest-src": ["'self'"],
       },
     },
   })

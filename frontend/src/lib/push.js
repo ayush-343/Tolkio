@@ -48,7 +48,11 @@ export function getNotificationPermission() {
 export async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return null;
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register("/sw.js", {
+      updateViaCache: "none", // Always fetch fresh SW from network
+    });
+    // Force check for updates so the latest sw.js is activated
+    registration.update().catch(() => {});
     console.log("Service Worker registered successfully.");
     return registration;
   } catch (error) {
