@@ -45,6 +45,11 @@ const StreamVideoProvider = ({ children }) => {
   const callMetaRef = useRef(null);
   const [lastEndedCallInfo, setLastEndedCallInfo] = useState(null);
 
+  // Track whether push was already registered (prevent re-registering on every render)
+  const pushRegisteredRef = useRef(false);
+  // Track the client instance to avoid re-creating on React effect re-runs
+  const clientRef = useRef(null);
+
   const { data: tokenData } = useQuery({
     queryKey: ["streamToken"],
     queryFn: getStreamToken,
@@ -54,6 +59,12 @@ const StreamVideoProvider = ({ children }) => {
   // Initialise the StreamVideoClient
   useEffect(() => {
     if (!authUser || !tokenData?.token) return;
+
+    // If we already have a client for this user, just re-use it
+    if (clientRef.current) {
+      setVideoClient(clientRef.current);
+      return;
+    }
 
     const user = {
       id: authUser._id,
@@ -67,19 +78,17 @@ const StreamVideoProvider = ({ children }) => {
       token: tokenData.token,
     });
 
+    clientRef.current = client;
     setVideoClient(client);
 
-    return () => {
-      // Note: do not call disconnectUser here, because getOrCreateInstance reuses instances
-      // and disconnecting it might break other active parts of the component if it remounts.
-      // We can just clear the local react state:
-      setVideoClient(null);
-    };
+    // No cleanup — the client is reused across mounts.
+    // Cleanup only on actual unmount (user logs out), handled separately.
   }, [authUser, tokenData]);
 
-  // Register push notifications when videoClient is set up
+  // Register push notifications once when videoClient is set up
   useEffect(() => {
-    if (videoClient) {
+    if (videoClient && !pushRegisteredRef.current) {
+      pushRegisteredRef.current = true;
       registerServiceWorkerAndSubscribe().catch((err) => {
         console.error("Failed to setup push subscription:", err);
       });
@@ -258,17 +267,15 @@ const StreamVideoProvider = ({ children }) => {
         try { await call.camera.disable(); } catch { /* ignore */ }
       }
 
-      // Notify target user via push notification
-      try {
-        await axiosInstance.post("/users/push-notify-call", {
-          targetUserId: receiverUserId,
-          callId,
-          isAudioOnly: audioOnly,
-          callerName: authUser.fullName,
-        });
-      } catch (err) {
+      // Notify target user via push notification (fire-and-forget)
+      axiosInstance.post("/users/push-notify-call", {
+        targetUserId: receiverUserId,
+        callId,
+        isAudioOnly: audioOnly,
+        callerName: authUser.fullName,
+      }).catch((err) => {
         console.error("Failed to send push notification to receiver:", err);
-      }
+      });
 
       // Track call metadata (caller side)
       callMetaRef.current = {

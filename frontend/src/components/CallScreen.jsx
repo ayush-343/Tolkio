@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   StreamCall,
   StreamTheme,
@@ -32,6 +32,20 @@ const CallContent = ({ onCallEnded, isAudioOnly, onCallConnected }) => {
   // Call timer for audio calls
   const [elapsed, setElapsed] = useState(0);
 
+  // Track whether the call was ever active (RINGING/JOINING/JOINED)
+  // so we don't treat the initial IDLE state as "call ended"
+  const wasActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      callingState === CallingState.RINGING ||
+      callingState === CallingState.JOINING ||
+      callingState === CallingState.JOINED
+    ) {
+      wasActiveRef.current = true;
+    }
+  }, [callingState]);
+
   useEffect(() => {
     if (!isAudioOnly || callingState !== CallingState.JOINED) return;
     const t = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -53,7 +67,9 @@ const CallContent = ({ onCallEnded, isAudioOnly, onCallConnected }) => {
   };
 
   // When the call ends (user leaves or other side hangs up)
-  if (callingState === CallingState.LEFT || callingState === CallingState.IDLE) {
+  // Only trigger if the call was previously active — prevents termination
+  // before the call even starts (initial IDLE → RINGING transition)
+  if (wasActiveRef.current && (callingState === CallingState.LEFT || callingState === CallingState.IDLE)) {
     // Use a microtask to avoid calling setState during render
     queueMicrotask(() => onCallEnded?.());
     return null;
