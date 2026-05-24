@@ -4,7 +4,6 @@ import HomePage from "./pages/Homepage.jsx";
 import SignUpPage from "./pages/SignUpPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
-import CallPage from "./pages/CallPage.jsx";
 import ChatPage from "./pages/ChatPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -15,6 +14,7 @@ import { Toaster } from "react-hot-toast";
 import PageLoader from "./components/PageLoader.jsx";
 import useAuthUser from "./hooks/useAuthUser.js";
 import Layout from "./components/Layout.jsx";
+import StreamVideoProvider from "./components/StreamVideoProvider.jsx";
 import { useThemeStore } from "./store/useThemeStore.js";
 
 const App = () => {
@@ -32,18 +32,7 @@ const App = () => {
       data-theme={theme}
     >
       <Routes>
-        <Route
-          path="/"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <Layout showSidebar={true}>
-                <HomePage />
-              </Layout>
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
+        {/* Public routes — no video provider needed */}
         <Route
           path="/signup"
           element={
@@ -65,68 +54,6 @@ const App = () => {
           }
         />
         <Route
-          path="/notifications"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <Layout showSidebar={true}>
-                <NotificationsPage />
-              </Layout>
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
-        <Route
-          path="/call/:id"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <CallPage />
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
-
-        <Route
-          path="/chat/:id"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <Layout showSidebar={false}>
-                <ChatPage />
-              </Layout>
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
-
-        <Route
-          path="/friends"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <Layout showSidebar={true}>
-                <FriendsPage />
-              </Layout>
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
-
-        <Route
-          path="/settings"
-          element={
-            isAuthenticated && isOnboarded ? (
-              <Layout showSidebar={true}>
-                <SettingsPage />
-              </Layout>
-            ) : (
-              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
-            )
-          }
-        />
-
-        <Route
           path="/onboarding"
           element={
             isAuthenticated ? (
@@ -137,6 +64,64 @@ const App = () => {
               )
             ) : (
               <Navigate to="/login" />
+            )
+          }
+        />
+
+        {/* 
+          All authenticated+onboarded routes are wrapped in StreamVideoProvider
+          so incoming call detection works on EVERY page (WhatsApp style).
+        */}
+        <Route
+          path="/*"
+          element={
+            isAuthenticated && isOnboarded ? (
+              <StreamVideoProvider>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      <Layout showSidebar={true}>
+                        <HomePage />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <Layout showSidebar={true}>
+                        <NotificationsPage />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/chat/:id"
+                    element={
+                      <Layout showSidebar={false}>
+                        <ChatPage />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/friends"
+                    element={
+                      <Layout showSidebar={true}>
+                        <FriendsPage />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <Layout showSidebar={true}>
+                        <SettingsPage />
+                      </Layout>
+                    }
+                  />
+                </Routes>
+              </StreamVideoProvider>
+            ) : (
+              <Navigate to={!isAuthenticated ? "/login" : "/onboarding"} />
             )
           }
         />

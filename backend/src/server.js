@@ -36,7 +36,14 @@ app.use(
           "wss://*.stream-io-api.com",
           "https://*.getstream.io",
           "wss://*.getstream.io",
+          // Stream Video SDK domains
+          "https://video.stream-io-api.com",
+          "wss://video.stream-io-api.com",
+          "https://*.stream-io-video.com",
+          "wss://*.stream-io-video.com",
         ],
+        // Allow inline media for video calling
+        "media-src": ["'self'", "blob:", "https://*.stream-io-cdn.com"],
       },
     },
   })

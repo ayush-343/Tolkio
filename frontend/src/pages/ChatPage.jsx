@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router";
 import useAuthUser from "../hooks/useAuthUser";
 import { useThemeStore } from "../store/useThemeStore.js";
@@ -11,30 +11,63 @@ import {
   Chat,
   MessageList,
   MessageInput,
+  MessageSimple,
   Thread,
   Window,
 } from "stream-chat-react";
 import "stream-chat-react/dist/css/v2/index.css";
-import { StreamChat } from "stream-chat";
 import toast from "react-hot-toast";
-import { connectStreamUser, disconnectStreamClient } from "../lib/stream";
+import { connectStreamUser } from "../lib/stream";
+import { useVideoClient } from "../components/StreamVideoProvider.jsx";
 
 import ChatLoader from "../components/ChatLoader.jsx";
 import CallButton from "../components/CallButton.jsx";
+import OutgoingCallModal from "../components/OutgoingCallModal.jsx";
+import CallStatusMessage from "../components/CallStatusMessage.jsx";
 
 const STREAM_API_KEY = import.meta.env.VITE_STREAM_API_KEY;
 
+/**
+ * Custom message renderer that intercepts call_status messages
+ * and renders them as WhatsApp-style call status bubbles.
+ */
+const CustomMessage = (props) => {
+  const { message } = props;
+
+  // If this message has call_status data, render the call status bubble
+  if (message?.call_status) {
+    const isMyMessage = message.user?.id === props?.Message?.props?.client?.userID
+      || message?.user?.id === message?.channel?.data?.created_by?.id;
+
+    return (
+      <CallStatusMessage
+        message={message}
+        isMyMessage={props.isMyMessage ?? false}
+      />
+    );
+  }
+
+  // Otherwise, use the default message component
+  return <MessageSimple {...props} />;
+};
+
 const ChatPage = () => {
   const { id } = useParams();
-  console.log(id);
 
   const [chatClient, setChatClient] = useState(null);
   const [channel, setChannel] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Outgoing call state (for showing "Calling..." modal)
+  const [isCalling, setIsCalling] = useState(false);
+  const [callReceiver, setCallReceiver] = useState(null);
+  const [callIsAudioOnly, setCallIsAudioOnly] = useState(false);
+
   const { authUser } = useAuthUser();
   // Read the site-wide theme from the zustand theme store
   const { theme } = useThemeStore();
+  // Get the video calling functions from global StreamVideoProvider
+  const { startCall, activeCall, isAudioOnly, handleCallEnded, lastEndedCallInfo, clearLastEndedCallInfo } = useVideoClient() || {};
 
   // Map common site themes to Stream Chat theme variants.
   // Assumption: themes like 'dark', 'night', 'dracula', 'black', 'business', 'forest' are visually dark.
@@ -146,18 +179,102 @@ const ChatPage = () => {
     };
   }, [tokenData, authUser, id, tokenLoading]);
 
-  const handleVideoCall = () => {
-    if (channel) {
-      const callUrl = `${window.location.origin}/call/${channel.id}`; // Example call URL
-      // You can implement logic to share this URL with the other user, e.g., via a message in the chat
-
-      channel.sendMessage({
-        text: `I've started a video call! Join me here: ${callUrl}`,
-      });
-      console.log("Initiate video call at:", callUrl);
-      toast.error("Video call link sent in chat");
+  // When the activeCall ends (detected by StreamVideoProvider), hide the outgoing modal
+  useEffect(() => {
+    if (!activeCall && isCalling) {
+      setIsCalling(false);
+      setCallReceiver(null);
+      setCallIsAudioOnly(false);
     }
-  };
+  }, [activeCall, isCalling]);
+
+  // Send a call status message to chat when a call ends (caller only)
+  useEffect(() => {
+    if (!lastEndedCallInfo || !channel || !lastEndedCallInfo.isCaller) {
+      // If not the caller, just clear the info
+      if (lastEndedCallInfo && !lastEndedCallInfo.isCaller) {
+        clearLastEndedCallInfo?.();
+      }
+      return;
+    }
+
+    const sendCallStatus = async () => {
+      const { isAudioOnly: audioOnly, duration, wasAnswered } = lastEndedCallInfo;
+      const callType = audioOnly ? "audio" : "video";
+      const typeLabel = audioOnly ? "Voice" : "Video";
+      const status = wasAnswered ? "completed" : "missed";
+
+      const fallbackText = wasAnswered
+        ? `${typeLabel} call`
+        : `Missed ${typeLabel.toLowerCase()} call`;
+
+      try {
+        await channel.sendMessage({
+          text: fallbackText,
+          call_status: {
+            type: callType,
+            status,
+            duration: duration || 0,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to send call status message:", err);
+      }
+
+      clearLastEndedCallInfo?.();
+    };
+
+    sendCallStatus();
+  }, [lastEndedCallInfo, channel, clearLastEndedCallInfo]);
+
+  // Shared call initiation logic for both audio and video
+  const initiateCall = useCallback(async (audioOnly) => {
+    if (!channel || !startCall || !authUser) return;
+
+    const targetUserId = id;
+    if (!targetUserId) return;
+
+    try {
+      // Get the other member's info from the channel state for display
+      const members = Object.values(channel.state.members || {});
+      const otherMember = members.find((m) => m.user_id !== authUser._id || m.user?.id !== authUser._id);
+      const receiverName = otherMember?.user?.name || otherMember?.user?.id || targetUserId;
+      const receiverImage = otherMember?.user?.image || null;
+
+      setCallReceiver({ name: receiverName, image: receiverImage });
+      setCallIsAudioOnly(audioOnly);
+      setIsCalling(true);
+
+      await startCall(targetUserId, receiverName, receiverImage, audioOnly);
+    } catch (error) {
+      console.error(`Failed to start ${audioOnly ? 'audio' : 'video'} call:`, error);
+      toast.error("Could not start the call. Please try again.");
+      setIsCalling(false);
+      setCallReceiver(null);
+      setCallIsAudioOnly(false);
+    }
+  }, [channel, startCall, authUser, id]);
+
+  // WhatsApp-style: ring the other user for video call
+  const handleVideoCall = useCallback(() => initiateCall(false), [initiateCall]);
+
+  // WhatsApp-style: ring the other user for audio call
+  const handleAudioCall = useCallback(() => initiateCall(true), [initiateCall]);
+
+  // Cancel outgoing call
+  const handleCancelCall = useCallback(async () => {
+    if (activeCall) {
+      try {
+        await activeCall.leave();
+      } catch {
+        // ignore
+      }
+    }
+    handleCallEnded?.();
+    setIsCalling(false);
+    setCallReceiver(null);
+    setCallIsAudioOnly(false);
+  }, [activeCall, handleCallEnded]);
 
   if (loading || !chatClient || !channel) {
     return <ChatLoader />;
@@ -167,9 +284,9 @@ const ChatPage = () => {
     <div className="h-[93vh]">
       {/* Chat UI here */}
       <Chat client={chatClient} theme={streamTheme}>
-        <Channel channel={channel}>
+        <Channel channel={channel} Message={CustomMessage}>
           <div className="w-full relative">
-            <CallButton handleVideoCall={handleVideoCall} />
+            <CallButton handleVideoCall={handleVideoCall} handleAudioCall={handleAudioCall} />
             <Window>
               <ChannelHeader />
               <MessageList />
@@ -179,6 +296,16 @@ const ChatPage = () => {
           <Thread />
         </Channel>
       </Chat>
+
+      {/* Outgoing call modal — "Calling..." overlay */}
+      {isCalling && callReceiver && !activeCall?.state?.callingState?.includes?.("JOINED") && (
+        <OutgoingCallModal
+          receiverName={callReceiver.name}
+          receiverImage={callReceiver.image}
+          isAudioOnly={callIsAudioOnly}
+          onCancel={handleCancelCall}
+        />
+      )}
     </div>
   );
 };
