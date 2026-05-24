@@ -1,6 +1,17 @@
 import express from 'express';
 import { protectRoute } from '../middleware/auth.middleware.js';
-import { getMyFriends, getRecommendedUsers, sendFriendRequest, acceptFriendRequest, getFriendRequest, getOutgoingFriendRequests, declineFriendRequest, updateProfile } from '../controllers/user.controller.js';
+import {
+  getMyFriends,
+  getRecommendedUsers,
+  sendFriendRequest,
+  acceptFriendRequest,
+  getFriendRequest,
+  getOutgoingFriendRequests,
+  declineFriendRequest,
+  updateProfile,
+  savePushSubscription,
+  sendCallNotification,
+} from '../controllers/user.controller.js';
 
 const router = express.Router();
 
@@ -17,5 +28,8 @@ router.put("/friend-request/:id/decline", declineFriendRequest);
 
 router.get("/friend-requests", getFriendRequest);
 router.get("/outgoing-friend-requests", getOutgoingFriendRequests);
+
+router.post("/push-subscribe", savePushSubscription);
+router.post("/push-notify-call", sendCallNotification);
 
 export default router;

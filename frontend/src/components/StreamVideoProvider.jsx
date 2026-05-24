@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, createContext, useContext } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   StreamVideo,
   StreamVideoClient,
@@ -11,6 +12,8 @@ import useAuthUser from "../hooks/useAuthUser";
 import { getStreamToken } from "../lib/api";
 import IncomingCallModal from "./IncomingCallModal";
 import CallScreen from "./CallScreen";
+import { axiosInstance } from "../lib/axios";
+import { registerServiceWorkerAndSubscribe } from "../lib/push";
 
 const STREAM_API_KEY = import.meta.env.VITE_STREAM_API_KEY;
 
@@ -28,6 +31,8 @@ export const useVideoClient = () => useContext(VideoContext);
 const StreamVideoProvider = ({ children }) => {
   const { authUser } = useAuthUser();
   const [videoClient, setVideoClient] = useState(null);
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Active call (either outgoing that we started, or incoming that we accepted)
   const [activeCall, setActiveCall] = useState(null);
@@ -69,6 +74,58 @@ const StreamVideoProvider = ({ children }) => {
       setVideoClient(null);
     };
   }, [authUser, tokenData]);
+
+  // Register push notifications when videoClient is set up
+  useEffect(() => {
+    if (videoClient) {
+      registerServiceWorkerAndSubscribe().catch((err) => {
+        console.error("Failed to setup push subscription:", err);
+      });
+    }
+  }, [videoClient]);
+
+  // Listen for joinCallId in the search params to auto-join a call (e.g. from notification click)
+  useEffect(() => {
+    if (!videoClient || !authUser) return;
+
+    const joinCallId = searchParams.get("joinCallId");
+    const audioParam = searchParams.get("audioOnly");
+
+    if (joinCallId) {
+      const audioOnly = audioParam === "true";
+
+      const autoJoin = async () => {
+        try {
+          const call = videoClient.call("default", joinCallId);
+          await call.join();
+
+          if (audioOnly) {
+            try { await call.camera.disable(); } catch { /* ignore */ }
+          }
+
+          callMetaRef.current = {
+            isAudioOnly: audioOnly,
+            isCaller: false,
+            connectedAt: Date.now(),
+            receiverUserId: null,
+          };
+
+          setIsAudioOnly(audioOnly);
+          setActiveCall(call);
+
+          // Clear query params so refresh doesn't trigger another join
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete("joinCallId");
+          newParams.delete("audioOnly");
+          setSearchParams(newParams);
+        } catch (err) {
+          console.error("Auto-joining call failed:", err);
+        }
+      };
+
+      autoJoin();
+    }
+  }, [videoClient, authUser, searchParams, setSearchParams]);
 
   // Listen for incoming ringing calls
   useEffect(() => {
@@ -199,6 +256,18 @@ const StreamVideoProvider = ({ children }) => {
         try { await call.camera.disable(); } catch { /* ignore */ }
       }
 
+      // Notify target user via push notification
+      try {
+        await axiosInstance.post("/users/push-notify-call", {
+          targetUserId: receiverUserId,
+          callId,
+          isAudioOnly: audioOnly,
+          callerName: authUser.fullName,
+        });
+      } catch (err) {
+        console.error("Failed to send push notification to receiver:", err);
+      }
+
       // Track call metadata (caller side)
       callMetaRef.current = {
         isAudioOnly: audioOnly,
@@ -234,8 +303,8 @@ const StreamVideoProvider = ({ children }) => {
       <StreamVideo client={videoClient}>
         {children}
 
-        {/* Global incoming call modal — shows on ANY page */}
-        {incomingCall && !activeCall && (
+        {/* Global incoming call modal — shows on ANY page except settings */}
+        {incomingCall && !activeCall && location.pathname !== "/settings" && (
           <IncomingCallModal
             call={incomingCall}
             onAccept={handleAcceptCall}

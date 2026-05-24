@@ -1,5 +1,15 @@
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
+import webpush from "web-push";
+
+// Configure VAPID details
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL || "mailto:ayushsrivastavamail@gmail.com",
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 //To get recommended users
 export async function getRecommendedUsers(req, res) {
@@ -248,5 +258,89 @@ export async function updateProfile(req, res) {
             return res.status(400).json({ message: "Username or email is already taken" });
         }
         res.status(500).json({ message: error.message || "Internal server error" });
+    }
+}
+
+export async function savePushSubscription(req, res) {
+    try {
+        const { subscription } = req.body;
+        if (!subscription || !subscription.endpoint || !subscription.keys) {
+            return res.status(400).json({ message: "Invalid subscription data" });
+        }
+
+        const userId = req.user.id;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Avoid duplicate subscriptions by checking endpoint
+        const exists = user.pushSubscriptions.some(
+            (sub) => sub.endpoint === subscription.endpoint
+        );
+
+        if (!exists) {
+            user.pushSubscriptions.push(subscription);
+            await user.save();
+        }
+
+        res.status(200).json({ message: "Push subscription saved successfully" });
+    } catch (error) {
+        console.error("Error in savePushSubscription:", error.message);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export async function sendCallNotification(req, res) {
+    try {
+        const { targetUserId, callId, isAudioOnly, callerName } = req.body;
+        if (!targetUserId || !callId) {
+            return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        const recipient = await User.findById(targetUserId);
+        if (!recipient || !recipient.pushSubscriptions || recipient.pushSubscriptions.length === 0) {
+            return res.status(200).json({ message: "Recipient has no push subscriptions" });
+        }
+
+        const payload = JSON.stringify({
+            title: isAudioOnly ? "Incoming Voice Call" : "Incoming Video Call",
+            body: `${callerName} is calling you...`,
+            data: {
+                callId,
+                audioOnly: isAudioOnly,
+                callerId: req.user.id,
+            }
+        });
+
+        const sendPromises = recipient.pushSubscriptions.map(async (sub) => {
+            try {
+                await webpush.sendNotification(
+                    {
+                        endpoint: sub.endpoint,
+                        keys: {
+                            p256dh: sub.keys.p256dh,
+                            auth: sub.keys.auth,
+                        },
+                    },
+                    payload
+                );
+            } catch (err) {
+                // If 410 (Gone) or 404 (Not Found), delete subscription from user
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                    await User.findByIdAndUpdate(recipient._id, {
+                        $pull: { pushSubscriptions: { endpoint: sub.endpoint } }
+                    });
+                } else {
+                    console.error("Failed to send push notification to endpoint:", sub.endpoint, err);
+                }
+            }
+        });
+
+        await Promise.all(sendPromises);
+        res.status(200).json({ message: "Notifications sent successfully" });
+    } catch (error) {
+        console.error("Error in sendCallNotification:", error.message);
+        res.status(500).json({ message: "Internal server error" });
     }
 }

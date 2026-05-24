@@ -72,6 +72,16 @@ const userSchema = new mongoose.Schema({
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         }
+    ],
+    pushSubscriptions: [
+        {
+            endpoint: { type: String, required: true },
+            expirationTime: { type: Number },
+            keys: {
+                p256dh: { type: String, required: true },
+                auth: { type: String, required: true }
+            }
+        }
     ]
 
 }, {
