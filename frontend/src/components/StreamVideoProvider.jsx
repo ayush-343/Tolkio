@@ -61,7 +61,7 @@ const StreamVideoProvider = ({ children }) => {
       image: authUser.profilePic,
     };
 
-    const client = new StreamVideoClient({
+    const client = StreamVideoClient.getOrCreateInstance({
       apiKey: STREAM_API_KEY,
       user,
       token: tokenData.token,
@@ -70,7 +70,9 @@ const StreamVideoProvider = ({ children }) => {
     setVideoClient(client);
 
     return () => {
-      client.disconnectUser().catch(() => {});
+      // Note: do not call disconnectUser here, because getOrCreateInstance reuses instances
+      // and disconnecting it might break other active parts of the component if it remounts.
+      // We can just clear the local react state:
       setVideoClient(null);
     };
   }, [authUser, tokenData]);
