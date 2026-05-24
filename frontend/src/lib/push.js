@@ -3,6 +3,9 @@ import { axiosInstance } from "./axios";
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 function urlBase64ToUint8Array(base64String) {
+  if (!base64String) {
+    return new Uint8Array();
+  }
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/\-/g, "+")
@@ -22,6 +25,11 @@ function urlBase64ToUint8Array(base64String) {
  * Requests notification permissions from the user.
  */
 export async function registerServiceWorkerAndSubscribe() {
+  if (!VAPID_PUBLIC_KEY) {
+    console.warn("VITE_VAPID_PUBLIC_KEY is not defined. Skipping push setup.");
+    return null;
+  }
+
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     console.warn("Service Worker or Push Notifications are not supported in this browser.");
     return null;
