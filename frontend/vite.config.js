@@ -35,6 +35,6 @@ export default defineConfig({
         },
       },
     },
-    chunkSizeWarningLimit: 1200, // increase warning limit to focus on real issues
+    chunkSizeWarningLimit: 2500, // increase warning limit to accommodate the large WebRTC Stream Video/Chat SDK vendors
   },
 })
