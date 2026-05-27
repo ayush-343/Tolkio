@@ -139,7 +139,9 @@ const SignUpPage = () => {
                   {/* CONFIRM PASSWORD */}
                   <div className="form-control w-full">
                     <label className="label">
-                      <span className="label-text text-lg">Re-enter Password</span>
+                      <span className="label-text text-lg">
+                        Re-enter Password
+                      </span>
                     </label>
                     <input
                       type="password"
