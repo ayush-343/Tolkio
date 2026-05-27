@@ -29,7 +29,13 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        "img-src": ["'self'", "data:", "https://flagcdn.com", "https://*.stream-io-cdn.com"],
+        "img-src": [
+          "'self'",
+          "data:",
+          "https://flagcdn.com",
+          "https://*.stream-io-cdn.com",
+          "https://avatar.iran.liara.run",
+        ],
         "connect-src": [
           "'self'",
           "https://*.stream-io-api.com",
@@ -60,10 +66,12 @@ app.use(
 );
 
 // Security: Rate limiting to prevent Brute force / DDoS
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000);
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 300);
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: { message: "Too many requests from this IP, please try again later." }
+  windowMs: rateLimitWindowMs, // 15 minutes by default
+  max: rateLimitMax, // limit each IP to N requests per windowMs
+  message: { message: "Too many requests from this IP, please try again later." }
 });
 app.use('/api', apiLimiter);
 
@@ -73,16 +81,16 @@ const __dirname = path.resolve(); // to get the current directory name
 // it allows the frontend to send the cookies
 // Allow local frontend dev servers and an optional FRONTEND_URL env var used in production
 const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    "http://localhost:5173",
-    "http://localhost:5174",
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:5174",
 ].filter(Boolean);
 
 app.use(
-    cors({
-        origin: ["http://localhost:5173", "http://localhost:5174"], // allow local dev servers
-        credentials: true, // allow frontend to send the cookies
-    })
+  cors({
+    origin: allowedOrigins, // allow local dev servers + optional frontend URL
+    credentials: true, // allow frontend to send the cookies
+  })
 );
 
 // Security: Prevent resource exhaustion by limiting JSON body payload size
@@ -96,15 +104,15 @@ app.use("/api/chat", chatRoutes)
 
 // Serve static files from the frontend's dist directory
 if (process.env.NODE_ENV === "production") {
-    app.use(express.static(path.join(__dirname, "../frontend/dist")));
-    // For any routes (above) not handled by the API, serve the frontend's index.html
-    app.get("*", (req, res) => {
-        res.sendFile(path.join(__dirname, "../frontend/", "dist", "index.html"));
-    });
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+  // For any routes (above) not handled by the API, serve the frontend's index.html
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../frontend/", "dist", "index.html"));
+  });
 }
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    connectDB();
+  console.log(`Server is running on port ${PORT}`);
+  connectDB();
 });
 
