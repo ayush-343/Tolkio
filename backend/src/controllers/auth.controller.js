@@ -128,6 +128,34 @@ export async function logout(req, res) {
     res.status(200).json({ success: true, message: "Logged out successfully" });
 }
 
+export async function getMe(req, res) {
+    const token = req.cookies.jwt;
+    if (!token) {
+        return res.status(200).json({ success: true, user: null });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+        if (!decoded?.userId) {
+            return res.status(200).json({ success: true, user: null });
+        }
+
+        const user = await User.findById(decoded.userId).select("-password");
+        if (!user) {
+            return res.status(200).json({ success: true, user: null });
+        }
+
+        return res.status(200).json({ success: true, user });
+    } catch (error) {
+        res.clearCookie("jwt", {
+            httpOnly: true,
+            sameSite: "strict",
+            secure: process.env.NODE_ENV === "production",
+        });
+        return res.status(200).json({ success: true, user: null });
+    }
+}
+
 
 export async function onboard(req, res) {
     try {

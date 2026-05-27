@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, logout, onboard, sighup } from '../controllers/auth.controller.js';
+import { getMe, login, logout, onboard, sighup } from '../controllers/auth.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
 
 const router = express.Router()
@@ -17,8 +17,6 @@ router.post("/onboarding", protectRoute, onboard);
 // TODO:  forgot password and Implement send-password reset email
 
 //check if user is logged in or not
-router.get("/me", protectRoute, (req, res) => {
-    res.status(200).json({success:true, user: req.user })
-})
+router.get("/me", getMe);
 
 export default router; //export the router
