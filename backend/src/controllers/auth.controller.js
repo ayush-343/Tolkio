@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 
 export async function sighup(req, res) {
-    const { email, password, fullName } = req.body;
+    const { email, password, fullName, confirmPassword } = req.body;
 
     try {
         if (!email || !password || !fullName) {
@@ -11,6 +11,9 @@ export async function sighup(req, res) {
         }
         if (typeof password !== "string" || password.length < 6) {
             return res.status(400).json({ message: "Password must be a string of at least 6 characters" });
+        }
+        if (confirmPassword !== undefined && confirmPassword !== password) {
+            return res.status(400).json({ message: "Passwords do not match" });
         }
 
 
@@ -72,7 +75,10 @@ export async function sighup(req, res) {
             secure: process.env.NODE_ENV === "production"
         })
 
-        res.status(201).json({ success: true, user: newUser })
+        const safeUser = newUser.toObject();
+        delete safeUser.password;
+
+        res.status(201).json({ success: true, user: safeUser })
 
     } catch (error) {
         console.log("Error in signup controller ", error);

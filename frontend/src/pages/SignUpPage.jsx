@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DraftingCompass } from "lucide-react";
 import { Link } from "react-router";
+import toast from "react-hot-toast";
 
 import useSignup from "../hooks/useSignup";
 
@@ -10,6 +11,7 @@ const SignUpPage = () => {
     fullName: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
 
   //This is how I did it first version, without custom hook
@@ -35,6 +37,10 @@ const SignUpPage = () => {
   // Handle signup form submission , when the user submit the form
   const handleSignup = (e) => {
     e.preventDefault();
+    if (signupData.password !== signupData.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
     signupMutation(signupData); // Pass signupData to the mutate function
   };
 
@@ -113,7 +119,7 @@ const SignUpPage = () => {
                       <span className="label-text text-lg">Password</span>
                     </label>
                     <input
-                      type="text"
+                      type="password"
                       className="input input-bordered w-full"
                       placeholder="*********"
                       value={signupData.password}
@@ -129,6 +135,25 @@ const SignUpPage = () => {
                     <p className="text-sm opacity-70">
                       Your password must be at least 6 characters long.
                     </p>
+                  </div>
+                  {/* CONFIRM PASSWORD */}
+                  <div className="form-control w-full">
+                    <label className="label">
+                      <span className="label-text text-lg">Re-enter Password</span>
+                    </label>
+                    <input
+                      type="password"
+                      className="input input-bordered w-full"
+                      placeholder="*********"
+                      value={signupData.confirmPassword}
+                      onChange={(e) =>
+                        setSignupData({
+                          ...signupData,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                      required
+                    />
                   </div>
                   {/* USER AGREEMENT {TODO: link terms and conditions and privacy policy} */}
                   <div className="form-control">
