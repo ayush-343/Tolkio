@@ -1,6 +1,6 @@
 # Tolkio 🗣️
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 Tolkio is an open-source, full-stack language exchange and chat application. It connects users based on their native and learning languages, enabling real-time conversations to practice and improve their language skills.
@@ -92,4 +92,4 @@ If you discover a security vulnerability within Tolkio, please do not disclose i
 
 ## 📝 License
 
-Distributed under the ISC License.
+Distributed under the MIT License. See `LICENSE` for more information.
