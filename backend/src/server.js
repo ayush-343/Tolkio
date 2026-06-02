@@ -118,10 +118,12 @@ app.get("/api/csrf-token", (req, res) => {
   res.json({ csrfToken: token });
 });
 
-// Apply CSRF protection to all state-changing API routes
-app.use("/api/auth", doubleCsrfProtection, authRoutes);
-app.use("/api/users", doubleCsrfProtection, userRoutes);
-app.use("/api/chat", doubleCsrfProtection, chatRoutes);
+// Apply CSRF protection globally to appease security scanners and ensure all state-changing routes are protected
+app.use(doubleCsrfProtection);
+
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/chat", chatRoutes);
 
 // Serve static files from the frontend's dist directory
 if (process.env.NODE_ENV === "production") {

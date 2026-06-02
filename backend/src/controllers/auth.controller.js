@@ -184,18 +184,28 @@ export async function onboard(req, res) {
             });
         }
 
-        // Whitelist only the allowed fields to prevent mass-assignment attacks
+        // Whitelist only the allowed fields to prevent mass-assignment attacks and NoSQL injection
         const allowedFields = {};
         const ONBOARD_FIELDS = ["fullName", "bio", "nativeLanguage", "learningLanguage", "location",
-            "nativeProficiency", "learningProficiency", "nativeLanguages", "learningLanguages", "profilePic"];
+            "nativeProficiency", "learningProficiency", "profilePic"];
+        const ARRAY_FIELDS = ["nativeLanguages", "learningLanguages"];
+
         for (const field of ONBOARD_FIELDS) {
-            if (req.body[field] !== undefined) {
+            if (typeof req.body[field] === "string") {
                 allowedFields[field] = req.body[field];
             }
         }
+        
+        for (const field of ARRAY_FIELDS) {
+            if (Array.isArray(req.body[field])) {
+                // Ensure all array elements are strings to prevent NoSQL injection
+                allowedFields[field] = req.body[field].filter(item => typeof item === "string");
+            }
+        }
+        
         allowedFields.isOnboarded = true;
 
-        const updateUser = await User.findByIdAndUpdate(userId, allowedFields, { new: true })
+        const updateUser = await User.findByIdAndUpdate(String(userId), { $set: allowedFields }, { new: true })
 
         if (!updateUser) {
             return res.status(404).json({ message: "User not found" });
