@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import { doubleCsrf } from "csrf-csrf";
 
 import authRoutes from './routes/auth.route.js';
 import userRoutes from './routes/user.route.js';
@@ -98,15 +99,43 @@ app.use(express.json({ limit: '10kb' }));
 
 app.use(cookieParser());
 
-app.use("/api/auth", authRoutes)
-app.use("/api/users", userRoutes)
-app.use("/api/chat", chatRoutes)
+// Security: CSRF protection using double-submit cookie pattern (stateless)
+const { doubleCsrfProtection, generateToken } = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET_KEY,
+  cookieName: "__csrf",
+  cookieOptions: {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  },
+  getTokenFromRequest: (req) => req.headers["x-csrf-token"],
+});
+
+// Expose a route for the frontend to obtain a CSRF token
+app.get("/api/csrf-token", (req, res) => {
+  const token = generateToken(req, res);
+  res.json({ csrfToken: token });
+});
+
+// Apply CSRF protection to all state-changing API routes
+app.use("/api/auth", doubleCsrfProtection, authRoutes);
+app.use("/api/users", doubleCsrfProtection, userRoutes);
+app.use("/api/chat", doubleCsrfProtection, chatRoutes);
 
 // Serve static files from the frontend's dist directory
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  // Rate limit for the catch-all route to prevent filesystem abuse
+  const staticLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    message: { message: "Too many requests, please try again later." },
+  });
+
   // For any routes (above) not handled by the API, serve the frontend's index.html
-  app.get("*", (req, res) => {
+  app.get("*", staticLimiter, (req, res) => {
     res.sendFile(path.join(__dirname, "../frontend/", "dist", "index.html"));
   });
 }

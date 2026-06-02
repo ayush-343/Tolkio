@@ -17,14 +17,15 @@ export async function sighup(req, res) {
         }
 
 
-        // To avoid invalid email
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+        // To avoid invalid email (linear-time safe regex to prevent ReDoS)
+        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+        if (typeof email !== "string" || !emailRegex.test(email)) {
             return res.status(400).json({ message: "Invalid email format" });
         }
 
-        //Check Existing User
-        const existingUser = await User.findOne({ email });
+        //Check Existing User — sanitize email to prevent NoSQL injection
+        const sanitizedEmail = String(email).toLowerCase();
+        const existingUser = await User.findOne({ email: sanitizedEmail });
         if (existingUser) {
             return res.status(400).json({ message: "Email already in use, please use a different one " });
         }
@@ -94,11 +95,13 @@ export async function login(req, res) {
             return res.status(400).json({ message: "All fields are required" });
 
         }
-        if (typeof password !== "string") {
-            return res.status(400).json({ message: "Invalid input type for password" });
+        if (typeof email !== "string" || typeof password !== "string") {
+            return res.status(400).json({ message: "Invalid input types" });
         }
 
-        const user = await User.findOne({ email });
+        // Sanitize email to prevent NoSQL injection
+        const sanitizedEmail = String(email).toLowerCase();
+        const user = await User.findOne({ email: sanitizedEmail });
         if (!user) return res.status(401).json({ message: "Invalid email or password" })
 
         const isPasswordCorrect = await user.matchPassword(password);
@@ -181,10 +184,18 @@ export async function onboard(req, res) {
             });
         }
 
-        const updateUser = await User.findByIdAndUpdate(userId, {
-            ...req.body,
-            isOnboarded: true,
-        }, { new: true })
+        // Whitelist only the allowed fields to prevent mass-assignment attacks
+        const allowedFields = {};
+        const ONBOARD_FIELDS = ["fullName", "bio", "nativeLanguage", "learningLanguage", "location",
+            "nativeProficiency", "learningProficiency", "nativeLanguages", "learningLanguages", "profilePic"];
+        for (const field of ONBOARD_FIELDS) {
+            if (req.body[field] !== undefined) {
+                allowedFields[field] = req.body[field];
+            }
+        }
+        allowedFields.isOnboarded = true;
+
+        const updateUser = await User.findByIdAndUpdate(userId, allowedFields, { new: true })
 
         if (!updateUser) {
             return res.status(404).json({ message: "User not found" });
