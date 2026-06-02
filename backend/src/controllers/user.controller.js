@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
 import webpush from "web-push";
+import mongoose from "mongoose";
 
 // Configure VAPID details
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -296,6 +297,10 @@ export async function sendCallNotification(req, res) {
         const { targetUserId, callId, isAudioOnly, callerName } = req.body;
         if (!targetUserId || !callId) {
             return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        if (typeof targetUserId !== "string" || !mongoose.isValidObjectId(targetUserId)) {
+            return res.status(400).json({ message: "Invalid target user id" });
         }
 
         const recipient = await User.findById(targetUserId);
