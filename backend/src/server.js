@@ -100,7 +100,7 @@ app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
 // Security: CSRF protection using double-submit cookie pattern (stateless)
-const { doubleCsrfProtection, generateToken } = doubleCsrf({
+const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET_KEY,
   cookieName: "__csrf",
   cookieOptions: {
@@ -110,11 +110,12 @@ const { doubleCsrfProtection, generateToken } = doubleCsrf({
     path: "/",
   },
   getTokenFromRequest: (req) => req.headers["x-csrf-token"],
+  getSessionIdentifier: (req) => req.cookies.jwt || "",
 });
 
 // Expose a route for the frontend to obtain a CSRF token
 app.get("/api/csrf-token", (req, res) => {
-  const token = generateToken(req, res);
+  const token = generateCsrfToken(req, res);
   res.json({ csrfToken: token });
 });
 
@@ -124,6 +125,15 @@ app.use(doubleCsrfProtection);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
+
+// Error handling middleware for CSRF protection
+app.use((err, req, res, next) => {
+  if (err && (err.message === "invalid csrf token" || err.code === "EBADCSRFTOKEN")) {
+    return res.status(403).json({ message: "Invalid CSRF token" });
+  }
+  next(err);
+});
+
 
 // Serve static files from the frontend's dist directory
 if (process.env.NODE_ENV === "production") {
