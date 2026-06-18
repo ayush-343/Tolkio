@@ -21,6 +21,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust first proxy (Render, Railway, etc.) so express-rate-limit reads the real client IP
+app.set('trust proxy', 1);
+
 // Security: Hide X-Powered-By header
 app.disable('x-powered-by');
 
@@ -68,7 +71,7 @@ app.use(
 
 // Security: Rate limiting to prevent Brute force / DDoS
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000);
-const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 300);
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 1000);
 const apiLimiter = rateLimit({
   windowMs: rateLimitWindowMs, // 15 minutes by default
   max: rateLimitMax, // limit each IP to N requests per windowMs
@@ -142,7 +145,7 @@ if (process.env.NODE_ENV === "production") {
   // Rate limit for the catch-all route to prevent filesystem abuse
   const staticLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500,
+    max: 2000,
     message: { message: "Too many requests, please try again later." },
   });
 
