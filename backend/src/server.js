@@ -9,6 +9,7 @@ import { doubleCsrf } from "csrf-csrf";
 import authRoutes from './routes/auth.route.js';
 import userRoutes from './routes/user.route.js';
 import chatRoutes from './routes/chat.route.js';
+import webhookRoutes from './routes/webhook.route.js';
 
 import cors from 'cors';
 import path from 'path';
@@ -19,6 +20,7 @@ import { connectDB } from './lib/db.js';
 dotenv.config();
 
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 // Trust first proxy (Render, Railway, etc.) so express-rate-limit reads the real client IP
@@ -97,6 +99,22 @@ app.use(
   })
 );
 
+// Stream Chat webhook needs raw body for HMAC signature verification.
+// This must come BEFORE express.json() so the raw body is preserved.
+app.use("/api/chat/webhook",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  (req, _res, next) => {
+    // Store raw body for signature verification, then parse JSON for downstream handlers
+    req.rawBody = req.body;
+    try {
+      req.body = JSON.parse(req.body.toString("utf-8"));
+    } catch {
+      // If parsing fails, the webhook controller will handle it
+    }
+    next();
+  }
+);
+
 // Security: Prevent resource exhaustion by limiting JSON body payload size
 app.use(express.json({ limit: '10kb' }));
 
@@ -121,6 +139,11 @@ app.get("/api/csrf-token", (req, res) => {
   const token = generateCsrfToken(req, res);
   res.json({ csrfToken: token });
 });
+
+// Mount the Stream Chat webhook BEFORE CSRF middleware.
+// The webhook endpoint is verified via Stream's x-signature header, not CSRF tokens.
+// The /reply endpoint lives in chatRoutes (after CSRF) so it's properly protected.
+app.use("/api/chat", webhookRoutes);
 
 // Apply CSRF protection globally to appease security scanners and ensure all state-changing routes are protected
 app.use(doubleCsrfProtection);

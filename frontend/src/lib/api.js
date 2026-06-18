@@ -74,3 +74,13 @@ export async function getStreamToken() {
     const response = await axiosInstance.get("/chat/token");
     return response.data;
 }
+
+/**
+ * Send a reply to a chat message (used by the notification reply feature).
+ * @param {string} channelId - The Stream Chat channel ID
+ * @param {string} text - The reply text
+ */
+export async function replyToMessage(channelId, text) {
+    const response = await axiosInstance.post("/chat/reply", { channelId, text });
+    return response.data;
+}
