@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDownToLine, Cpu, Eraser, FlaskConical, LockKeyhole, Sparkles, Wifi, WifiOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { runTask } from "../ai/router";
-import { downloadModel, modelCached, removeModel } from "../ai/assets";
+import { deviceCheck, downloadModel, modelCached, removeModel } from "../ai/assets";
 import { localRuntime } from "../ai/runtime";
 import { axiosInstance } from "../lib/axios";
 import AiBenchmarkPanel from "../components/AiBenchmarkPanel";
@@ -78,6 +78,7 @@ export default function AiLabPage() {
     catch (cause) {
       const message = cause?.message || "The AI request could not be completed.";
       setActionError(message);
+      setProgress({ value: 0, text: "The operation stopped. See the error below." });
     } finally { setBusy(false); }
   };
 
@@ -85,6 +86,8 @@ export default function AiLabPage() {
     if (!model) throw new Error("This model has not been prepared for this environment yet.");
     controller.current = new AbortController();
     setProgress({ value: 0, text: "Checking this browser and its available storage…" });
+    await deviceCheck(model);
+    controller.current.signal.throwIfAborted();
     await downloadModel(model, (value) => setProgress({ value, text: "Downloading and verifying model files…" }), controller.current.signal);
     setIsDownloaded(true);
     setProgress({ value: 1, text: "The verified model is ready." });
@@ -174,6 +177,7 @@ export default function AiLabPage() {
 
         {busy && <progress className="progress progress-primary mt-4 w-full" value={Math.round(progress.value * 100)} max="100" aria-label="Model download or load progress" />}
         {progress.text && <p role="status" aria-live="polite" className="mt-2 text-sm text-base-content/70">{progress.text}</p>}
+        {actionError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm"><AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{actionError}</span></div>}
         {!model && !isLoading && !error && <p className="mt-4 rounded-lg bg-base-300/70 p-3 text-sm text-base-content/75">No model artifact is configured for this deployment. A maintainer must prepare and publish a pinned model manifest before users can download it.</p>}
         {model && <p className="mt-4 text-xs leading-5 text-base-content/55">Runtime {model.runtimeVersion} · upstream GPU-memory estimate {formatBytes(model.gpuMemoryMB * 1_000_000)} · actual browser memory use may be higher.</p>}
       </section>
@@ -205,7 +209,6 @@ export default function AiLabPage() {
           <button type="button" className="btn btn-primary" onClick={handleRun} disabled={busy || !input.trim() || (execution === "local" && !canUseLocal) || (execution === "server" && (!canUseServer || !serverConsent))}><Sparkles size={16} aria-hidden="true" />{busy ? "Working…" : "Run task"}</button>
           {result?.metrics && <span className="text-xs text-base-content/60">First token {(result.metrics.firstTokenMs / 1000).toFixed(1)}s · total {(result.metrics.completionMs / 1000).toFixed(1)}s</span>}
         </div>
-        {actionError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm"><AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{actionError}</span></div>}
         {result && <div className="mt-5 rounded-xl border border-base-300 bg-base-100 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Model response</h3><span className="badge badge-ghost">{result.execution} · {result.modelId}</span></div><div className="mt-3 whitespace-pre-wrap text-sm leading-6">{typeof result.output === "string" ? result.output : <><p className="font-medium">{result.output.question}</p><ol className="mt-2 list-decimal space-y-1 pl-5">{result.output.options.map((option, index) => <li key={`${index}-${option}`}>{option}{index === result.output.answerIndex && <span className="ml-2 badge badge-success badge-sm">Answer</span>}</li>)}</ol><p className="mt-3 text-base-content/70">{result.output.explanation}</p></>}</div><p className="mt-3 flex items-start gap-2 text-xs leading-5 text-base-content/55"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />AI output is an unreviewed draft. Check translations and corrections before sharing or learning from them.</p></div>}
       </section>
 

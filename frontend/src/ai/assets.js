@@ -26,6 +26,7 @@ export async function downloadModel(m, onProgress, signal) {
   validateManifest(m);
   const cache = await caches.open(cacheName(m));
   await cache.delete(new URL(`${m.baseUrl}complete`, location.origin));
+  onProgress?.(0);
   let done = 0;
   for (const file of m.files) {
     signal?.throwIfAborted();
@@ -35,7 +36,8 @@ export async function downloadModel(m, onProgress, signal) {
     if (!existingIsValid) {
       if (existing) await cache.delete(url);
       const r = await fetch(url, { signal, credentials: 'omit', cache: 'no-store' });
-      if (!r.ok) throw new Error('Model download failed. Retry to resume verified files.');
+      if (!r.ok) throw new Error(`Model file ${file.path} could not be downloaded (HTTP ${r.status}). Retry, or ask the maintainer to rebuild the deployment with npm run build:render.`);
+      if (r.headers.get('content-type')?.includes('text/html')) throw new Error('Model files are missing from this deployment. The server returned the app page instead of a model file. The maintainer must rebuild Render with npm run build:render.');
       if (!r.body) throw new Error('This browser cannot stream model files safely.');
       const [hashStream, cacheStream] = r.body.tee();
       const write = cache.put(url, new Response(cacheStream, { headers: r.headers }));
