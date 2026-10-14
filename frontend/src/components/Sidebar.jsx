@@ -1,5 +1,4 @@
 import { useLocation, Link } from "react-router";
-import useAuthUser from "../hooks/useAuthUser";
 import useLogout from "../hooks/useLogout";
 
 import {
@@ -9,10 +8,10 @@ import {
   UserIcon,
   Settings,
   LogOut,
+  BrainCircuit,
 } from "lucide-react";
 
 const Sidebar = ({ isMobileOpen, onClose }) => {
-  const { authUser } = useAuthUser();
   const { logoutMutation } = useLogout();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -36,7 +35,7 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
         <div className="p-5 border-b border-base-300 flex justify-between items-center">
           <Link to="/" className="flex items-center gap-2.5" onClick={onClose}>
             <DraftingCompass className="size-10 text-primary" />
-            <span className="text-3xl font-semibold font-mono bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+            <span className="text-3xl font-semibold font-mono text-primary">
               Talkio
             </span>
           </Link>
@@ -70,6 +69,16 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
           >
             <UserIcon className="size-5 text-base-content opacity-70" />
             <span className="text-lg font-semibold">Friends</span>
+          </Link>
+          <Link
+            to="/ai"
+            onClick={onClose}
+            className={`btn btn-ghost justify-start w-full px-3 gap-3 ${
+              currentPath === "/ai" ? "btn-active" : ""
+            }`}
+          >
+            <BrainCircuit className="size-5 text-base-content opacity-70" />
+            <span className="text-lg font-semibold">AI Lab</span>
           </Link>
           <Link
             to="/notifications"

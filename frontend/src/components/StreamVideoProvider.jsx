@@ -14,6 +14,7 @@ import IncomingCallModal from "./IncomingCallModal";
 import CallScreen from "./CallScreen";
 import { axiosInstance } from "../lib/axios";
 import { registerServiceWorkerAndSubscribe } from "../lib/push";
+import { localRuntime } from "../ai/runtime";
 
 const STREAM_API_KEY = import.meta.env.VITE_STREAM_API_KEY;
 
@@ -40,6 +41,12 @@ const StreamVideoProvider = ({ children }) => {
   const [isAudioOnly, setIsAudioOnly] = useState(false);
   // Incoming ringing call (before accept/reject)
   const [incomingCall, setIncomingCall] = useState(null);
+
+  // On-device generation competes with video for GPU and battery resources.
+  useEffect(() => {
+    localRuntime.setCallActive(Boolean(activeCall));
+    return () => localRuntime.setCallActive(false);
+  }, [activeCall]);
 
   // Call metadata for building chat status messages after a call ends
   const callMetaRef = useRef(null);

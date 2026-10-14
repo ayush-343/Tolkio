@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+public/ai-models/*/
+!public/ai-models/catalog.json
 .env
 .env.*.local
 .env.local

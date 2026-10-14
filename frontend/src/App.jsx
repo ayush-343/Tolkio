@@ -8,6 +8,7 @@ import ChatPage from "./pages/ChatPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import FriendsPage from "./pages/FriendsPage.jsx";
+import AiLabPage from "./pages/AiLabPage.jsx";
 
 import { Toaster } from "react-hot-toast";
 
@@ -115,6 +116,14 @@ const App = () => {
                     element={
                       <Layout showSidebar={true}>
                         <SettingsPage />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/ai"
+                    element={
+                      <Layout showSidebar={true}>
+                        <AiLabPage />
                       </Layout>
                     }
                   />

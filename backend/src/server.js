@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.route.js';
 import userRoutes from './routes/user.route.js';
 import chatRoutes from './routes/chat.route.js';
 import webhookRoutes from './routes/webhook.route.js';
+import { aiRoutes } from './ai/routes.js';
 
 import cors from 'cors';
 import path from 'path';
@@ -35,6 +36,7 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "'wasm-unsafe-eval'"],
         "img-src": [
           "'self'",
           "data:",
@@ -44,6 +46,7 @@ app.use(
         ],
         "connect-src": [
           "'self'",
+          ...(process.env.AI_ASSET_ORIGIN ? [process.env.AI_ASSET_ORIGIN] : []),
           "https://*.stream-io-api.com",
           "wss://*.stream-io-api.com",
           "https://*.getstream.io",
@@ -151,6 +154,8 @@ app.use(doubleCsrfProtection);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
+// Versioned AI routes use the same cookie authentication and global CSRF policy.
+app.use("/api/v1", aiRoutes);
 
 // Error handling middleware for CSRF protection
 app.use((err, req, res, next) => {
@@ -182,4 +187,3 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   connectDB();
 });
-
