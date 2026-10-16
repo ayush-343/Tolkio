@@ -33,7 +33,7 @@ const Navbar = ({ showSidebarButton, onToggleSidebar }) => {
               <div className="pl-2 lg:pl-5">
                 <Link to="/" className="flex items-center gap-2.5">
                   <DraftingCompass className="size-9 text-primary" />
-                  <span className="text-3xl font-bold font-mono bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary tracking-wider hidden sm:inline">
+                  <span className="text-3xl font-bold font-mono text-primary tracking-wider hidden sm:inline">
                     Talkio
                   </span>
                 </Link>
@@ -44,7 +44,7 @@ const Navbar = ({ showSidebarButton, onToggleSidebar }) => {
           {/* RIGHT SIDE: Notifications, Theme, User, Logout */}
           <div className="flex items-center gap-3 sm:gap-4">
             <Link to={"/notifications"}>
-              <button className="btn btn-ghost btn-circle">
+              <button className="btn btn-ghost btn-circle" aria-label="Notifications">
                 <BellIcon className="h-6 w-6 text-base-content opacity-70" />
               </button>
             </Link>
@@ -65,6 +65,7 @@ const Navbar = ({ showSidebarButton, onToggleSidebar }) => {
             <button
               className="btn btn-ghost btn-circle"
               onClick={() => logoutMutation()}
+              aria-label="Log out"
             >
               <LogOutIcon className="h-6 w-6 text-base-content opacity-70" />
             </button>

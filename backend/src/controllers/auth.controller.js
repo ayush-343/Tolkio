@@ -1,3 +1,4 @@
+import { selfUser } from '../identity/serializers.js';
 import { upsertStreamUser } from "../lib/stream.js";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
@@ -76,8 +77,7 @@ export async function sighup(req, res) {
             secure: process.env.NODE_ENV === "production"
         })
 
-        const safeUser = newUser.toObject();
-        delete safeUser.password;
+        const safeUser = selfUser(newUser);
 
         res.status(201).json({ success: true, user: safeUser })
 
@@ -101,8 +101,8 @@ export async function login(req, res) {
 
         // Sanitize email to prevent NoSQL injection
         const sanitizedEmail = String(email).toLowerCase();
-        const user = await User.findOne({ email: sanitizedEmail });
-        if (!user) return res.status(401).json({ message: "Invalid email or password" })
+        const user = await User.findOne({ email: sanitizedEmail }).select("+password");
+        if (!user || (user.accountStatus && user.accountStatus !== "active")) return res.status(401).json({ message: "Invalid email or password" })
 
         const isPasswordCorrect = await user.matchPassword(password);
         if (!isPasswordCorrect) {
@@ -123,7 +123,7 @@ export async function login(req, res) {
             secure: process.env.NODE_ENV === "production"
         })
 
-        res.status(200).json({ success: true, user })
+        res.status(200).json({ success: true, user: selfUser(user) })
 
     } catch (error) {
         console.log("Error in login controller ", error);
@@ -150,11 +150,11 @@ export async function getMe(req, res) {
         }
 
         const user = await User.findById(decoded.userId).select("-password");
-        if (!user) {
+        if (!user || (user.accountStatus && user.accountStatus !== "active")) {
             return res.status(200).json({ success: true, user: null });
         }
 
-        return res.status(200).json({ success: true, user });
+        return res.status(200).json({ success: true, user: selfUser(user) });
     } catch (error) {
         res.clearCookie("jwt", {
             httpOnly: true,
@@ -184,28 +184,11 @@ export async function onboard(req, res) {
             });
         }
 
-        // Whitelist only the allowed fields to prevent mass-assignment attacks and NoSQL injection
-        const allowedFields = {};
-        const ONBOARD_FIELDS = ["fullName", "bio", "nativeLanguage", "learningLanguage", "location",
-            "nativeProficiency", "learningProficiency", "profilePic"];
-        const ARRAY_FIELDS = ["nativeLanguages", "learningLanguages"];
-
-        for (const field of ONBOARD_FIELDS) {
-            if (typeof req.body[field] === "string") {
-                allowedFields[field] = req.body[field];
-            }
+        const updateUser = await User.findById(userId);
+        if (updateUser) {
+            updateUser.set({ ...req.body, isOnboarded: true });
+            await updateUser.save();
         }
-        
-        for (const field of ARRAY_FIELDS) {
-            if (Array.isArray(req.body[field])) {
-                // Ensure all array elements are strings to prevent NoSQL injection
-                allowedFields[field] = req.body[field].filter(item => typeof item === "string");
-            }
-        }
-        
-        allowedFields.isOnboarded = true;
-
-        const updateUser = await User.findByIdAndUpdate(String(userId), { $set: allowedFields }, { new: true })
 
         if (!updateUser) {
             return res.status(404).json({ message: "User not found" });
@@ -217,19 +200,19 @@ export async function onboard(req, res) {
                 name: updateUser.fullName,
                 image: updateUser.profilePic,
             })
-            console.log(`Stream user updated after onboard for ${updateUser, fullName}`);
+            console.log("Stream profile updated after onboarding");
 
         } catch (streamError) {
             console.log("Error in updating stream user during onboarding ", streamError.message);
         }
 
 
-        res.status(200).json({ success: true, user: updateUser })
+        res.status(200).json({ success: true, user: selfUser(updateUser) })
     } catch (error) {
 
 
         console.error("Onboarding error: ", error);
-        console.log("Error in onboard controller ", error);
+        return res.status(500).json({ message: "Could not complete onboarding. Please retry." });
     }
 
 }

@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router";
 import useAuthUser from "../hooks/useAuthUser";
 import { useQuery } from "@tanstack/react-query";
 import { getStreamToken } from "../lib/api";
+import { axiosInstance } from "../lib/axios";
+import { tokenProviderFor } from "../lib/provider-tokens";
 
 import {
   StreamVideo,
@@ -30,14 +32,14 @@ const CallPage = () => {
   const { authUser, isLoading } = useAuthUser();
 
   const { data: tokenData } = useQuery({
-    queryKey: ["streamToken"],
+    queryKey: ["streamToken", authUser?._id],
     queryFn: getStreamToken,
     enabled: !!authUser,
   });
 
   useEffect(() => {
     const initCall = async () => {
-      if (!tokenData.token || !authUser || !callId) return;
+      if (!tokenData?.videoToken || !authUser || !callId) return;
 
       try {
         console.log("Initializing Stream video client...");
@@ -51,12 +53,13 @@ const CallPage = () => {
         const videoClient = new StreamVideoClient({
           apiKey: STREAM_API_KEY,
           user,
-          token: tokenData.token,
+          tokenProvider: tokenProviderFor(authUser._id, "video"),
         });
 
         const callInstance = videoClient.call("default", callId);
 
-        await callInstance.join({ create: true });
+        await axiosInstance.get(`/v1/calls/${encodeURIComponent(callId)}/authorize`);
+        await callInstance.join();
 
         console.log("Joined call successfully");
 

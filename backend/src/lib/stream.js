@@ -26,9 +26,11 @@ export const generateStreamToken = (userId) => {
     try {
         // ensure userId is a string
         const userIdStr = userId.toString();
-        return streamClient.createToken(userIdStr);
+        const now = Math.floor(Date.now() / 1000);
+        return streamClient.createToken(userIdStr, now + 3600, now - 30);
     } catch (error) {
         console.error("Error generating Stream token", error);
+        throw error;
         
     }
 }

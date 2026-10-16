@@ -2,7 +2,7 @@
 // Handles both call notifications and chat message notifications with inline reply
 
 // Take control of all pages immediately (important for iOS PWA)
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -28,7 +28,7 @@ self.addEventListener("push", (event) => {
         icon: "/icon-512.png",
         badge: "/icon-512.png",
         // Group messages from same chat — new message replaces old notification
-        tag: `talkio-chat-${channelId || "unknown"}`,
+        tag: `talkio-chat-${data.notificationId || channelId || "unknown"}`,
         renotify: true,
         // Chat messages auto-dismiss (unlike calls which require interaction)
         requireInteraction: false,
@@ -71,7 +71,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification(title || "Incoming Call", options)
     );
-  } catch (error) {
+  } catch {
     // Fallback for non-JSON payloads
     const text = event.data.text();
     event.waitUntil(

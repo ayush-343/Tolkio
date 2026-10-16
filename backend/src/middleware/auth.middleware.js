@@ -16,7 +16,7 @@ export const protectRoute = async (req, res, next) => {
                                                             // removing the password to prevent it from being sent in the response and be visible
         const user = await User.findById(decoded.userId).select("-password");
 
-        if (!user) {
+        if (!user || (user.accountStatus && user.accountStatus !== "active")) {
             return res.status(401).json({ message: "Unauthorized - User not found" });
         }
 

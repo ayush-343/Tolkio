@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
+        select: false,
         required: true,
         minlength: 6
     },
@@ -67,6 +68,8 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    accountStatus: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active' },
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     friends: [
         {
             type: mongoose.Schema.Types.ObjectId,

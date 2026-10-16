@@ -1,0 +1,12 @@
+title = "Talkio secret scanning"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependencies, build assets, and local test output"
+paths = ['''(^|/)node_modules/''', '''(^|/)dist/''', '''(^|/)test-results/''', '''(^|/)playwright-report/''', '''(^|/)\.security-reports/''']
+
+[[allowlists]]
+description = "Explicitly fake integration-test credentials"
+regexTarget = "secret"
+regexes = ['''^isolated-test-(session|csrf|stream)-secret$''', '''^browser-test-csrf$''']

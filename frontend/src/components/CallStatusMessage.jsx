@@ -74,4 +74,3 @@ const CallStatusMessage = ({ message, isMyMessage }) => {
 };
 
 export default CallStatusMessage;
-export { formatCallDuration };

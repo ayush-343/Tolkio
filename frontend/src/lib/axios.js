@@ -9,6 +9,7 @@ export const axiosInstance = axios.create({
 });
 
 let csrfToken = null;
+export function resetCsrfToken() { csrfToken = null; }
 
 // Helper to retrieve the CSRF token
 async function getCsrfToken() {

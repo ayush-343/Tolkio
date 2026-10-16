@@ -39,7 +39,7 @@ const IncomingCallModal = ({ call, onAccept, onReject }) => {
           gain.gain.value = 0.15;
           osc.start();
           osc.stop(ctx.currentTime + 0.3);
-        } catch (e) {
+        } catch {
           // Ignore audio creation errors on closed contexts
         }
       };
