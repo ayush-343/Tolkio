@@ -13,7 +13,7 @@ that setup; a script blocks high/critical security findings and error results.
 
 ## Required gates
 
-`Quality gate` requires promotion policy, Node integration/unit tests, ESLint,
+`Quality gate` requires promotion policy, backend/shared JavaScript syntax checks, Node integration/unit tests, ESLint,
 production frontend build, and Playwright desktop/mobile checks to succeed.
 
 `Security gate` requires runtime dependency audit, secret scanning, CodeQL, and
@@ -44,6 +44,7 @@ Node's built-in watch mode to remove its affected development dependency chain.
 npm ci --include=dev --prefix backend
 npm ci --include=dev --prefix frontend
 npm test
+node scripts/check-backend.mjs
 npm run lint --prefix frontend
 npm run build --prefix frontend
 node scripts/audit-dependencies.mjs
