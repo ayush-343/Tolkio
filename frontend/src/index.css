@@ -431,3 +431,11 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* Community additions inherit every active DaisyUI theme. */
+.community-surface :is(input,textarea,select) { min-width:0; max-width:100%; }
+.community-surface :is(button,a,input,textarea,select,summary):focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+.community-surface ::selection { background:oklch(var(--p)); color:oklch(var(--pc)); }
+.community-surface :is(input,textarea) { caret-color:oklch(var(--p)); }
+.community-surface a { text-underline-offset:0.2em; }
+.community-surface { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }

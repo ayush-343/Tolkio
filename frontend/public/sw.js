@@ -19,9 +19,9 @@ self.addEventListener("push", (event) => {
     const { title, body, data, type } = payload;
 
     // ── Chat Message Notification ──
-    if (type === "chat_message") {
+    if ((type || data?.type) === "chat_message") {
       const channelId = data?.channelId;
-      const senderUserId = data?.senderUserId;
+      const senderUserId = data?.senderUserId || data?.senderId;
 
       const options = {
         body: body || "You have a new message.",
@@ -34,12 +34,14 @@ self.addEventListener("push", (event) => {
         requireInteraction: false,
         data: {
           type: "chat_message",
+          circleId: data?.circleId,
+          url: data?.url,
           channelId,
           senderUserId,
           senderName: data?.senderName || title || "Someone",
           channelType: data?.channelType || "messaging",
         },
-        actions: [
+        actions: data?.circleId ? [{ action: "open", title: "Open circle" }] : [
           // Inline reply action — shows a text input on supported platforms
           // (Chrome/Edge on desktop and Android)
           { action: "reply", title: "Reply", type: "text", placeholder: "Type a reply..." },
@@ -106,8 +108,10 @@ self.addEventListener("notificationclick", (event) => {
 
   // ── Chat Message: Open Chat or clicked notification body ──
   if (notificationType === "chat_message") {
-    const senderUserId = data?.senderUserId;
-    const targetUrl = senderUserId
+    const senderUserId = data?.senderUserId || data?.senderId;
+    const targetUrl = /^[a-f0-9]{24}$/.test(data?.circleId || "")
+      ? `${self.location.origin}/circles/${data.circleId}/chat`
+      : senderUserId
       ? `${self.location.origin}/chat/${senderUserId}`
       : self.location.origin;
 

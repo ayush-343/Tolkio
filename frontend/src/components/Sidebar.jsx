@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   BrainCircuit,
+  UsersIcon,
 } from "lucide-react";
 
 const Sidebar = ({ isMobileOpen, onClose }) => {
@@ -50,6 +51,7 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
+          <Link to="/circles" onClick={onClose} className={`btn btn-ghost justify-start w-full px-3 gap-3 ${currentPath.startsWith("/circles") ? "btn-active" : ""}`}><UsersIcon className="size-5" /><span className="text-lg font-semibold">Circles</span></Link>
           <Link
             to="/"
             onClick={onClose}

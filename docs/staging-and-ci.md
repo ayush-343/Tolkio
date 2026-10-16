@@ -94,3 +94,10 @@ production database/provider secrets for test deployments.
 After staging tests pass, mark the release PR ready and merge it manually. Main
 checks run again. Configure production Render **After CI Checks Pass** as well
 so a merge's production build waits for its checks.
+
+### Community beta (M1)
+
+See [M1 staging configuration and manual checks](m1-community.md). Keep
+`COMMUNITY_ENABLED=false` until the dedicated Stream channel grants and real SDK
+permission tests pass. The existing notification worker also drains community jobs;
+configure both web and worker with the same staging cohort/staff variables.

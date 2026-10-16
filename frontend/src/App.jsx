@@ -1,3 +1,8 @@
+import CirclesPage from './pages/CirclesPage';
+import CirclePage from './pages/CirclePage';
+import CircleChatPage from './pages/CircleChatPage';
+import DiscoveryPage from './pages/DiscoveryPage';
+import CommunitySafetyPage from './pages/CommunitySafetyPage';
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import HomePage from "./pages/Homepage.jsx";
@@ -79,6 +84,11 @@ const App = () => {
             isAuthenticated && isOnboarded ? (
               <StreamVideoProvider>
                 <Routes>
+                  <Route path="/circles" element={<Layout showSidebar={true}><CirclesPage /></Layout>} />
+                  <Route path="/circles/:id" element={<Layout showSidebar={true}><CirclePage /></Layout>} />
+                  <Route path="/circles/:id/chat" element={<Layout showSidebar={false}><CircleChatPage /></Layout>} />
+                  <Route path="/discover" element={<Layout showSidebar={true}><DiscoveryPage /></Layout>} />
+                  <Route path="/community/safety" element={<Layout showSidebar={true}><CommunitySafetyPage /></Layout>} />
                   <Route
                     path="/"
                     element={
