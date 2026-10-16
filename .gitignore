@@ -4,3 +4,8 @@ backend/.env
 
 Tolkio_Interview_Prep.txt
 .ai-model-artifacts
+.security-reports/
+sarif/
+
+.DS_Store
+node_modules/

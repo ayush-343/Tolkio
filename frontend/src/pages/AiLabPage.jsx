@@ -7,6 +7,7 @@ import { deviceCheck, downloadModel, modelCached, removeModel } from "../ai/asse
 import { localRuntime } from "../ai/runtime";
 import { axiosInstance } from "../lib/axios";
 import AiBenchmarkPanel from "../components/AiBenchmarkPanel";
+import useAuthUser from "../hooks/useAuthUser";
 
 const TASKS = [
   ["starter", "Conversation starter"],
@@ -31,7 +32,8 @@ async function getModels() {
 }
 
 export default function AiLabPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ["aiModels"], queryFn: getModels });
+  const { authUser } = useAuthUser();
+  const { data, isLoading, error } = useQuery({ queryKey: ["aiModels", authUser?._id], queryFn: getModels });
   const models = data?.models ?? EMPTY_MODELS;
   const availableModels = useMemo(() => models.filter((model) => model.available), [models]);
   const [modelId, setModelId] = useState("");

@@ -16,7 +16,12 @@ Planning defaults: invite-led beta; 50 members per circle; 8 participants per sp
 
 ## 2. Current code and required foundation work
 
-Observed in the current repository:
+The table records the baseline observed before M0. The local M0 implementation
+and its remaining staging/deployment gates are documented in
+[m0-foundation.md](m0-foundation.md); do not treat these baseline rows as the
+current implementation audit.
+
+Baseline observations:
 
 | Current behavior | Required change before expanding access |
 |---|---|

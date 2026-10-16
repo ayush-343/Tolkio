@@ -1,3 +1,5 @@
+import { PUBLIC_USER_FIELDS, publicUser, selfUser } from '../identity/serializers.js';
+import { communicationService } from '../communication/service.js';
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
 import webpush from "web-push";
@@ -22,10 +24,13 @@ export async function getRecommendedUsers(req, res) {
             $and: [
                 { _id: { $ne: currentUserId } }, //exclude the current user
                 { _id: { $nin: currentUser.friends } }, // exclude users that are already friends , nin- not in
-                { isOnboarded: true }, //only show Onboarded users
+                { isOnboarded: true },
+                { accountStatus: { $nin: ['suspended', 'deleted'] } },
+                { _id: { $nin: currentUser.blockedUsers || [] } },
+                { blockedUsers: { $ne: currentUserId } },
             ]
-        })
-        res.status(200).json({ recommendedUsers })
+        }).select(PUBLIC_USER_FIELDS)
+        res.status(200).json({ recommendedUsers: recommendedUsers.map(publicUser) })
     } catch (error) {
         console.error("Error in getRecommendedUsers controller", error.message);
         res.status(500).json({ message: "Internal server error" });
@@ -38,7 +43,7 @@ export async function getMyFriends(req, res) {
         const user = await User.findById(req.user.id)
             .select("friends")
             .populate("friends", "fullName profilePic nativeLanguage learningLanguage nativeLanguages learningLanguages"); // populate the friends with their details
-        res.status(200).json(user.friends);
+        res.status(200).json(user.friends.filter(Boolean).map(publicUser));
     } catch (error) {
         console.error("Error in getMyFriends controller", error.message);
         res.status(500).json({ message: "Internal S" })
@@ -63,7 +68,7 @@ export async function sendFriendRequest(req, res) {
 
         //check if the recipient exists
         const recipient = await User.findById(recipientId)
-        if (!recipient) {
+        if (!recipient || (recipient.accountStatus && recipient.accountStatus !== 'active') || recipient.blockedUsers?.some(id => String(id) === String(myId)) || req.user.blockedUsers?.some(id => String(id) === String(recipientId))) {
             return res.status(404).json({ message: "User not found" })
         }
 
@@ -199,9 +204,6 @@ export async function declineFriendRequest(req, res) {
             return res.status(403).json({ message: "You are not authorized to decline this friend request" });
         }
 
-        friendRequest.status = "rejected";
-        await friendRequest.save();
-
         await FriendRequest.findByIdAndDelete(requestId);
 
         res.status(200).json({ message: "Friend request declined successfully" });
@@ -213,7 +215,6 @@ export async function declineFriendRequest(req, res) {
 
 export async function updateProfile(req, res) {
     try {
-        const { fullName, username, email, password, profilePic, nativeLanguage, nativeProficiency, learningLanguage, learningProficiency, nativeLanguages, learningLanguages } = req.body;
         const userId = req.user.id;
 
         const user = await User.findById(userId);
@@ -221,36 +222,15 @@ export async function updateProfile(req, res) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        if (fullName !== undefined) user.fullName = fullName;
-
-        // Handle empty strings for sparse unique field
-        if (username !== undefined) {
-            user.username = username === "" ? undefined : username;
-        }
-
-        if (email !== undefined) user.email = email;
-
-        if (password) {
-            if (password.length < 6) {
-                return res.status(400).json({ message: "Password must be at least 6 characters long." });
-            }
-            user.password = password;
-        }
-
-        if (profilePic !== undefined) user.profilePic = profilePic;
-        if (nativeLanguage !== undefined) user.nativeLanguage = nativeLanguage;
-        if (nativeProficiency !== undefined) user.nativeProficiency = nativeProficiency;
-        if (learningLanguage !== undefined) user.learningLanguage = learningLanguage;
-        if (learningProficiency !== undefined) user.learningProficiency = learningProficiency;
-
-        if (nativeLanguages !== undefined) user.nativeLanguages = nativeLanguages;
-        if (learningLanguages !== undefined) user.learningLanguages = learningLanguages;
+        // The route's strict profile contract excludes privileged/private fields.
+        user.set(req.body);
+        if (req.body.username === "") user.username = undefined;
 
         await user.save();
 
         const updatedUser = await User.findById(userId).select("-password");
 
-        res.status(200).json(updatedUser);
+        res.status(200).json(selfUser(updatedUser));
     } catch (error) {
         console.error("Error in updateProfile controller:", error.message);
 
@@ -281,6 +261,7 @@ export async function savePushSubscription(req, res) {
         );
 
         if (!exists) {
+            if (user.pushSubscriptions.length >= 10) return res.status(400).json({ message: 'Remove an old device subscription before adding another.' });
             user.pushSubscriptions.push(subscription);
             await user.save();
         }
@@ -292,9 +273,12 @@ export async function savePushSubscription(req, res) {
     }
 }
 
-export async function sendCallNotification(req, res) {
+export async function sendCallNotification(req, res, next) {
     try {
-        const { targetUserId, callId, isAudioOnly, callerName } = req.body;
+        const { targetUserId, callId } = req.body;
+        const verified = await communicationService.authorizeCall(req.user.id, callId, targetUserId, true);
+        const callerName = verified.callerName;
+        const isAudioOnly = verified.audioOnly;
         if (!targetUserId || !callId) {
             return res.status(400).json({ message: "Missing required fields" });
         }
@@ -345,7 +329,6 @@ export async function sendCallNotification(req, res) {
         await Promise.all(sendPromises);
         res.status(200).json({ message: "Notifications sent successfully" });
     } catch (error) {
-        console.error("Error in sendCallNotification:", error.message);
-        res.status(500).json({ message: "Internal server error" });
+        next(error);
     }
 }

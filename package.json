@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node --test",
-
+    "test": "node --test tests/*.test.mjs backend/test/*.test.js frontend/src/ai/*.test.js",
     "build": "npm install --prefix backend && npm install --include=dev --prefix frontend && npm run build --prefix frontend",
     "build:render": "npm install --prefix backend && npm install --include=dev --prefix frontend && npm run prepare:ai-model -- Qwen3-0.6B-q4f16_1-MLC && npm run build --prefix frontend",
     "start": "npm run start --prefix backend",
     "prepare:ai-model": "node scripts/prepare-ai-model.mjs",
-    "worker:ai": "npm run worker:ai --prefix backend"
+    "worker:ai": "npm run worker:ai --prefix backend",
+    "worker": "npm run worker --prefix backend"
   },
   "repository": {
     "type": "git",

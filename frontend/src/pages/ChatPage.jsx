@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import useAuthUser from "../hooks/useAuthUser";
 import { useThemeStore } from "../store/useThemeStore.js";
-import { useQuery } from "@tanstack/react-query";
-import { getStreamToken } from "../lib/api";
+import { axiosInstance } from "../lib/axios";
+import { tokenProviderFor } from "../lib/provider-tokens";
 
 import {
   Channel,
@@ -18,7 +18,7 @@ import {
 import "stream-chat-react/dist/css/v2/index.css";
 import toast from "react-hot-toast";
 import { connectStreamUser } from "../lib/stream";
-import { useVideoClient } from "../components/StreamVideoProvider.jsx";
+import { useVideoClient } from "../components/video-context";
 
 import ChatLoader from "../components/ChatLoader.jsx";
 import CallButton from "../components/CallButton.jsx";
@@ -36,8 +36,6 @@ const CustomMessage = (props) => {
 
   // If this message has call_status data, render the call status bubble
   if (message?.call_status) {
-    const isMyMessage = message.user?.id === props?.Message?.props?.client?.userID
-      || message?.user?.id === message?.channel?.data?.created_by?.id;
 
     return (
       <CallStatusMessage
@@ -57,6 +55,7 @@ const ChatPage = () => {
   const [chatClient, setChatClient] = useState(null);
   const [channel, setChannel] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [chatError, setChatError] = useState("");
 
   // Outgoing call state (for showing "Calling..." modal)
   const [isCalling, setIsCalling] = useState(false);
@@ -67,7 +66,7 @@ const ChatPage = () => {
   // Read the site-wide theme from the zustand theme store
   const { theme } = useThemeStore();
   // Get the video calling functions from global StreamVideoProvider
-  const { startCall, activeCall, isAudioOnly, handleCallEnded, lastEndedCallInfo, clearLastEndedCallInfo } = useVideoClient() || {};
+  const { startCall, activeCall, handleCallEnded, lastEndedCallInfo, clearLastEndedCallInfo } = useVideoClient() || {};
 
   // Map common site themes to Stream Chat theme variants.
   // Assumption: themes like 'dark', 'night', 'dracula', 'black', 'business', 'forest' are visually dark.
@@ -87,97 +86,32 @@ const ChatPage = () => {
     return "str-chat__theme-light";
   })();
 
-  const { data: tokenData, isLoading: tokenLoading } = useQuery({
-    queryKey: ["streamToken"],
-    queryFn: getStreamToken,
-    enabled: !!authUser, // only run if authUser is truthy
-  });
-
   useEffect(() => {
+    let cancelled = false;
+    let watchedChannel;
     const initChat = async () => {
-      if (!authUser) return;
-      // If token query is still loading, skip until it finishes
-      if (tokenLoading) return;
-      if (!tokenData?.token) {
-        console.error("Stream token missing: tokenData=", tokenData);
-        toast.error("Chat token missing. Please refresh or re-login.");
-        setLoading(false);
-        return;
-      }
+      setLoading(true);
+      setChatError("");
       try {
-        console.log("Initializing stream chat client");
-
-        // Create a instance of the chat client
-        const targetUserId = id; // The user you want to chat with
-
-        if (!targetUserId) {
-          toast.error("No user specified for chat.");
-          setLoading(false);
-          return;
-        }
-        // Use centralized stream helper to manage single client lifecycle
-        const client = await connectStreamUser(
-          STREAM_API_KEY,
-          authUser,
-          tokenData.token,
-        );
-
-        // Create or get a channel ID between the two users
-        const channelId = [authUser._id, targetUserId].sort().join("-"); // consistent channel ID for 1-1 chat
-
-        let currentChannel = client.channel("messaging", channelId, {
-          // "messaging" is the channel type for 1-1 and group chats
-          members: [authUser._id, targetUserId],
-        });
-
-        // Listening for incoming changes in the channel
-        try {
-          await currentChannel.watch();
-        } catch (watchErr) {
-          console.error(
-            "channel.watch failed, attempting one reconnect:",
-            watchErr,
-          );
-          // If the error is due to token/connection, try reconnect once
-          try {
-            if (typeof client.disconnect === "function")
-              await client.disconnect();
-            await client.connectUser(
-              {
-                id: authUser._id,
-                name: authUser.fullName,
-                image: authUser.avatarUrl,
-              },
-              tokenData.token,
-            );
-            // Recreate the channel using the reconnected client
-            currentChannel = client.channel("messaging", channelId, {
-              members: [authUser._id, targetUserId],
-            });
-            await currentChannel.watch();
-          } catch (retryErr) {
-            console.error("Retry after watch failure also failed:", retryErr);
-            throw retryErr;
-          }
-        }
-
+        const { data: { data: conversation } } = await axiosInstance.post('/v1/conversations/direct', { targetUserId: id });
+        if (cancelled) return;
+        const client = await connectStreamUser(STREAM_API_KEY, authUser, tokenProviderFor(authUser._id));
+        if (cancelled) return;
+        watchedChannel = client.channel(conversation.channelType, conversation.channelId);
+        await watchedChannel.watch();
+        if (cancelled) { await watchedChannel.stopWatching(); return; }
         setChatClient(client);
-        setChannel(currentChannel);
-        setLoading(false);
+        setChannel(watchedChannel);
       } catch (error) {
-        console.error("Error initializing stream chat client:", error);
-        toast.error("Failed to load chat. Please try again later.");
-      } finally {
-        setLoading(false);
-      }
+        if (!cancelled) setChatError(error.response?.data?.message || "Could not open this conversation. Confirm you are still friends and try again.");
+      } finally { if (!cancelled) setLoading(false); }
     };
-    initChat();
-    // cleanup on unmount for this effect
+    if (authUser && id) initChat();
     return () => {
-      // Do not globally disconnect the client here to avoid race conditions during fast navigation.
-      // Disconnection should happen on logout.
+      cancelled = true;
+      watchedChannel?.stopWatching().catch(() => {});
     };
-  }, [tokenData, authUser, id, tokenLoading]);
+  }, [authUser, id]);
 
   // When the activeCall ends (detected by StreamVideoProvider), hide the outgoing modal
   useEffect(() => {
@@ -276,6 +210,7 @@ const ChatPage = () => {
     setCallIsAudioOnly(false);
   }, [activeCall, handleCallEnded]);
 
+  if (chatError) return <section className="mx-auto max-w-xl p-6" role="alert"><h1 className="text-xl font-semibold">Conversation unavailable</h1><p className="mt-3 text-base-content/80">{chatError}</p><Link className="btn btn-primary mt-5" to="/friends">Back to friends</Link></section>;
   if (loading || !chatClient || !channel) {
     return <ChatLoader />;
   }

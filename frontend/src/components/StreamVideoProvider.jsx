@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef, createContext, useContext } from "react";
+import { VideoContext } from './video-context';
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
   StreamVideo,
@@ -6,10 +7,11 @@ import {
   CallingState,
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
-import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import useAuthUser from "../hooks/useAuthUser";
-import { getStreamToken } from "../lib/api";
+import { tokenProviderFor } from '../lib/provider-tokens';
+import { registerVideoSession, disconnectVideoSession } from '../lib/video-session';
 import IncomingCallModal from "./IncomingCallModal";
 import CallScreen from "./CallScreen";
 import { axiosInstance } from "../lib/axios";
@@ -19,8 +21,7 @@ import { localRuntime } from "../ai/runtime";
 const STREAM_API_KEY = import.meta.env.VITE_STREAM_API_KEY;
 
 // Context so child components can access the video client & start calls
-const VideoContext = createContext(null);
-export const useVideoClient = () => useContext(VideoContext);
+
 
 /**
  * Global StreamVideo provider.
@@ -31,6 +32,9 @@ export const useVideoClient = () => useContext(VideoContext);
  */
 const StreamVideoProvider = ({ children }) => {
   const { authUser } = useAuthUser();
+  const userId = authUser?._id;
+  const userName = authUser?.fullName;
+  const userImage = authUser?.profilePic;
   const [videoClient, setVideoClient] = useState(null);
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,40 +61,26 @@ const StreamVideoProvider = ({ children }) => {
   // Track the client instance to avoid re-creating on React effect re-runs
   const clientRef = useRef(null);
 
-  const { data: tokenData } = useQuery({
-    queryKey: ["streamToken"],
-    queryFn: getStreamToken,
-    enabled: !!authUser,
-  });
-
-  // Initialise the StreamVideoClient
   useEffect(() => {
-    if (!authUser || !tokenData?.token) return;
-
-    // If we already have a client for this user, just re-use it
-    if (clientRef.current) {
-      setVideoClient(clientRef.current);
-      return;
-    }
-
-    const user = {
-      id: authUser._id,
-      name: authUser.fullName,
-      image: authUser.profilePic,
-    };
-
-    const client = StreamVideoClient.getOrCreateInstance({
+    if (!userId || !STREAM_API_KEY) return;
+    const client = new StreamVideoClient({
       apiKey: STREAM_API_KEY,
-      user,
-      token: tokenData.token,
+      user: { id: userId, name: userName, image: userImage },
+      tokenProvider: tokenProviderFor(userId, 'video'),
     });
-
     clientRef.current = client;
+    registerVideoSession(client);
     setVideoClient(client);
-
-    // No cleanup — the client is reused across mounts.
-    // Cleanup only on actual unmount (user logs out), handled separately.
-  }, [authUser, tokenData]);
+    return () => {
+      if (clientRef.current === client) clientRef.current = null;
+      pushRegisteredRef.current = false;
+      callMetaRef.current = null;
+      setVideoClient(null);
+      setActiveCall(null);
+      setIncomingCall(null);
+      disconnectVideoSession(client).catch(() => {});
+    };
+  }, [userId, userName, userImage]);
 
   // Register push notifications once when videoClient is set up
   useEffect(() => {
@@ -110,10 +100,12 @@ const StreamVideoProvider = ({ children }) => {
     const audioParam = searchParams.get("audioOnly");
 
     if (joinCallId) {
-      const audioOnly = audioParam === "true";
+      void audioParam;
 
       const autoJoin = async () => {
         try {
+          const { data: { data: authorized } } = await axiosInstance.get(`/v1/calls/${encodeURIComponent(joinCallId)}/authorize`);
+          const audioOnly = authorized.audioOnly;
           const call = videoClient.call("default", joinCallId);
           await call.join();
 
@@ -137,7 +129,7 @@ const StreamVideoProvider = ({ children }) => {
           newParams.delete("audioOnly");
           setSearchParams(newParams);
         } catch (err) {
-          console.error("Auto-joining call failed:", err);
+          toast.error(err.response?.data?.message || "This call is unavailable.");
         }
       };
 
@@ -182,6 +174,8 @@ const StreamVideoProvider = ({ children }) => {
   // Accept incoming call
   const handleAcceptCall = useCallback(async (call, audioOnly = false) => {
     try {
+      const { data: { data: authorized } } = await axiosInstance.get(`/v1/calls/${encodeURIComponent(call.id)}/authorize`);
+      audioOnly = authorized.audioOnly;
       await call.join();
       // If audio-only, disable camera after joining
       if (audioOnly) {
@@ -200,7 +194,7 @@ const StreamVideoProvider = ({ children }) => {
       setIsAudioOnly(audioOnly);
       setActiveCall(call);
     } catch (err) {
-      console.error("Failed to accept call:", err);
+      toast.error(err.response?.data?.message || "This call is unavailable.");
       setIncomingCall(null);
     }
   }, []);
@@ -251,23 +245,12 @@ const StreamVideoProvider = ({ children }) => {
     async (receiverUserId, receiverName, receiverImage, audioOnly = false) => {
       if (!videoClient || !authUser) return null;
 
-      // Create a unique call ID using sorted user IDs + timestamp for uniqueness
-      const callId = `${[authUser._id, receiverUserId].sort().join("-")}-${Date.now()}`;
+      const { data: { data: provisioned } } = await axiosInstance.post('/v1/calls/direct',
+        { targetUserId: receiverUserId, audioOnly },
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+      const callId = provisioned.callId;
       const call = videoClient.call("default", callId);
-
-      await call.getOrCreate({
-        ring: true,
-        data: {
-          members: [
-            { user_id: authUser._id },
-            { user_id: receiverUserId },
-          ],
-          custom: {
-            // Store call type so the receiver knows if it's audio-only
-            audioOnly: audioOnly,
-          },
-        },
-      });
+      await call.get();
 
       // For audio-only calls, disable camera immediately
       if (audioOnly) {
@@ -279,7 +262,6 @@ const StreamVideoProvider = ({ children }) => {
         targetUserId: receiverUserId,
         callId,
         isAudioOnly: audioOnly,
-        callerName: authUser.fullName,
       }).catch((err) => {
         console.error("Failed to send push notification to receiver:", err);
       });

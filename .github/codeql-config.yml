@@ -1,0 +1,11 @@
+name: Talkio application security
+paths:
+  - backend/src
+  - frontend/src
+  - shared
+  - scripts
+paths-ignore:
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - '**/*.test.js'
+  - '**/*.test.mjs'
