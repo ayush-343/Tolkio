@@ -138,7 +138,7 @@ app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
 // Security: CSRF protection using double-submit cookie pattern (stateless)
-const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
+const { doubleCsrfProtection, generateCsrfToken, invalidCsrfTokenError } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET_KEY,
   cookieName: "__csrf",
   cookieOptions: {
@@ -163,7 +163,12 @@ app.get("/api/csrf-token", (req, res) => {
 app.use("/api/chat", webhookRoutes);
 
 // Apply CSRF protection globally to appease security scanners and ensure all state-changing routes are protected
-app.use(doubleCsrfProtection);
+app.use((req, res, next) => {
+  // Make the cookie precondition explicit; csrf-csrf still performs the full
+  // session-bound cryptographic validation, including the request header.
+  if (req.cookies.__csrf === undefined && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next(invalidCsrfTokenError);
+  return doubleCsrfProtection(req, res, next);
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

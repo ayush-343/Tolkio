@@ -24,3 +24,11 @@ test('code security gate rejects missing or malformed analysis rather than passi
   const incomplete = report(9); incomplete.runs[0].tool.driver.rules = [];
   assert.notEqual(run(incomplete), 0);
 });
+test('CodeQL extension-pack rule metadata is enforced like driver rules', () => {
+  const high = report(9);
+  high.runs[0].tool.extensions = [{ name: 'codeql/javascript-queries', rules: high.runs[0].tool.driver.rules }];
+  high.runs[0].tool.driver.rules = [];
+  assert.equal(run(high), 1);
+  high.runs[0].tool.extensions[0].rules[0].properties['security-severity'] = '4';
+  assert.equal(run(high), 0);
+});

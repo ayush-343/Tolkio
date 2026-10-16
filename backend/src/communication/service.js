@@ -15,7 +15,8 @@ export const chatGateway = {
 export function createCommunicationService({ users = User, chat = chatGateway, video = videoGateway } = {}) {
   async function friends(actorId, targetId) {
     if (!/^[a-f0-9]{24}$/.test(String(targetId)) || String(actorId) === String(targetId)) throw unavailable();
-    const [actor, target] = await Promise.all([users.findById(actorId), users.findById(targetId)]);
+    const projection = '_id fullName friends blockedUsers accountStatus';
+    const [actor, target] = await Promise.all([users.findById(String(actorId)).select(projection), users.findById(String(targetId)).select(projection)]);
     const includes = (values, id) => (values || []).some(value => String(value) === String(id));
     if (!active(actor) || !active(target) || !includes(actor.friends, targetId) || !includes(target.friends, actorId) || includes(actor.blockedUsers, targetId) || includes(target.blockedUsers, actorId)) throw unavailable();
     return { actor, target };
