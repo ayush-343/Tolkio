@@ -13,7 +13,6 @@ export const CIRCLE_GRANTS = {
   guest: [],
   anonymous: [],
   moderator: [],
-  channel_owner: [],
   channel_member: MEMBER_GRANTS,
   channel_moderator: MEMBER_GRANTS,
 };

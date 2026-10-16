@@ -64,9 +64,10 @@ export async function circleNotificationRecipients(circle, senderId, message) {
   const sender = await Membership.findOne({ circleId:circle._id,userId:senderId,state:'active' });
   if (!sender || circle.status !== 'active') return [];
   const announcement = ['owner','moderator'].includes(sender.role) && await OutboxJob.exists({ userId:senderId,circleId:circle._id,kind:'announcement',messageId:message.id });
-  const mentioned = (message.mentioned_users || []).map(u => u.id);
+  const mentioned = (message.mentioned_users || []).map(u => u.id).filter(id => /^[a-f0-9]{24}$/.test(id));
   const members = await Membership.find({ circleId:circle._id,state:'active',notifications:'mentions',userId:{ $ne:senderId,...(!announcement ? { $in:mentioned } : {}) } });
-  const senderUser = await User.findById(senderId).select('blockedUsers');
+  const senderUser = await User.findById(senderId).select('blockedUsers accountStatus');
+  if (!senderUser || senderUser.accountStatus !== 'active') return [];
   return User.find({ _id:{ $in:members.map(m => m.userId),$nin:senderUser?.blockedUsers || [] },accountStatus:{ $nin:['suspended','deleted'] },blockedUsers:{ $ne:senderId } }).select('pushSubscriptions');
 }
 export async function deliverCircleNotification(job) {

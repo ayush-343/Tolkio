@@ -41,6 +41,7 @@ const { circleNotificationRecipients, recordMessageEvent } = await import(
 );
 const { streamClient } = await import("../src/lib/stream.js");
 let db, app, alice, bob, outsider;
+const verifyProviderGrants = circleProvider.verify;
 const channels = new Map();
 const provider = {
   verify: async () => true,
@@ -771,4 +772,18 @@ test("staff can suspend and restore accounts independently of resolved reports",
     await AuditEvent.countDocuments({ action: "account.restore" }),
     1,
   );
+});
+
+test('provider grant verification rejects inherited defaults and elevated client roles', async () => {
+  const { CIRCLE_GRANTS } = await import('../src/communities/provider.js');
+  const stub = mock.method(streamClient,'getChannelType',async () => ({ grants:CIRCLE_GRANTS }));
+  try {
+    await verifyProviderGrants();
+    stub.mock.mockImplementation(async () => ({ grants:{ ...CIRCLE_GRANTS,user:['create-channel'] } }));
+    await assert.rejects(verifyProviderGrants());
+    stub.mock.mockImplementation(async () => ({ grants:{ ...CIRCLE_GRANTS,unexpected_owner:['read-channel'] } }));
+    await assert.rejects(verifyProviderGrants());
+    stub.mock.mockImplementation(async () => ({ grants:{ channel_member:CIRCLE_GRANTS.channel_member } }));
+    await assert.rejects(verifyProviderGrants());
+  } finally { stub.mock.restore(); }
 });
