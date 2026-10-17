@@ -13,7 +13,7 @@ import {
   staff,
   unavailable,
 } from "./policy.js";
-import { Circle, Membership, Invitation, Report, OutboxJob } from "./models.js";
+import { Circle, Membership, Report, OutboxJob } from "./models.js";
 import * as service from "./service.js";
 import * as contracts from "./contracts.js";
 import {
@@ -86,11 +86,7 @@ communityRoutes.get(
         userId: req.user.id,
         state: { $in: ["active", "joining", "removing"] },
       }),
-      Invitation.find({
-        userId: req.user.id,
-        acceptedAt: null,
-        expiresAt: { $gt: new Date() },
-      }),
+      service.pendingInvitations(req.user.id),
     ]);
     const banned = await Membership.find({
       userId: req.user.id,
@@ -263,13 +259,7 @@ mutation(
 communityRoutes.get(
   "/community/invitations",
   asyncRoute(async (req, res) => {
-    const invitations = await Invitation.find({
-      userId: req.user.id,
-      acceptedAt: null,
-      expiresAt: { $gt: new Date() },
-    })
-      .sort({ _id: -1 })
-      .limit(50);
+    const invitations = await service.pendingInvitations(req.user.id, 50);
     const circles = await Circle.find({
       _id: { $in: invitations.map((i) => i.circleId) },
       status: { $ne: "archived" },
@@ -420,17 +410,15 @@ communityRoutes.get(
       },
     );
     const users = await User.aggregate(pipeline);
-    const data = users
-      .slice(0, limit)
-      .map((u) => ({
-        ...publicUser(u),
-        reasons:
-          u.fitA && u.fitB
-            ? ["Reciprocal language match"]
-            : u.fitA || u.fitB
-              ? ["Language match"]
-              : ["Explore a new connection"],
-      }));
+    const data = users.slice(0, limit).map((u) => ({
+      ...publicUser(u),
+      reasons:
+        u.fitA && u.fitB
+          ? ["Reciprocal language match"]
+          : u.fitA || u.fitB
+            ? ["Language match"]
+            : ["Explore a new connection"],
+    }));
     const last = users[limit - 1];
     res.json({
       data,
@@ -512,17 +500,15 @@ communityRoutes.get(
       .sort({ _id: 1 })
       .limit(limit + 1);
     res.json({
-      data: reports
-        .slice(0, limit)
-        .map((r) => ({
-          id: r.id,
-          kind: r.kind,
-          circleId: r.circleId,
-          targetId: r.targetId,
-          reason: r.reason,
-          evidence: r.evidence,
-          status: r.status,
-        })),
+      data: reports.slice(0, limit).map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        circleId: r.circleId,
+        targetId: r.targetId,
+        reason: r.reason,
+        evidence: r.evidence,
+        status: r.status,
+      })),
       meta: {
         nextCursor: reports.length > limit ? reports[limit - 1].id : null,
       },

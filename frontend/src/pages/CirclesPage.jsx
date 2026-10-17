@@ -12,7 +12,7 @@ function Circles() {
     `/circles?limit=20${cursor ? `&after=${cursor}` : ""}${language ? `&languageCode=${language}` : ""}`,
     { poll: true },
   );
-  const invitations = useCommunity("/community/invitations");
+  const invitations = useCommunity("/community/invitations", { poll: true });
   const navigate = useNavigate();
   const mutation = useCommunityMutation((circle) =>
     navigate(`/circles/${circle.id}`),

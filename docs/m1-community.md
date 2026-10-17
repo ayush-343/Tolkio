@@ -128,3 +128,25 @@ blocks, legacy accounts, and notification selection. Desktop/mobile browser test
 exercise real rendered UI with mocked APIs, including safe chat-authorization
 failure; they do not establish successful real Stream chat or physical-device push.
 Real SDK checks and physical-device/manual scenarios remain staging release gates.
+
+## Invitation/join integrity follow-up — 17 October 2026
+
+The invite → recipient inbox → acceptance → worker → chat authorization path is
+covered by HTTP integration tests against an isolated Mongo replica set. Stream
+membership is mocked in these tests; the real-provider release gate above remains.
+
+- Invites write an Invitation and an `invited` Membership together, with an audit
+  event. They reserve no seat and grant no Stream access. Circle-version writes
+  serialize invitation creation with archive and moderator-role changes.
+- Acceptance of either listed or private invitations writes `acceptedAt`, reserves
+  one seat, changes membership to `joining`, and creates the outbox job in the
+  same transaction. Full circles roll all those writes back.
+- Only the intended recipient can accept an unexpired, unrevoked private invite.
+  Repeated/concurrent accepts preserve one membership, one seat, and one join event.
+- Removing/banning an invitee revokes their outstanding invite. Unbanning does not
+  resurrect it; private-circle entry requires a fresh invitation.
+- Inbox/directory queries share pending-invitation eligibility rules. Accepted,
+  expired, revoked, banned, and archived invitations do not appear as actionable
+  inbox items. The invitation inbox refreshes while the Circles page is open.
+- Chat authorization stays denied while membership is `invited` or `joining`;
+  the worker confirms provider access before marking the membership `active`.

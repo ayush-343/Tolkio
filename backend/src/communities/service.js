@@ -106,12 +106,15 @@ export async function access(userId, circleId, session, memberOnly = false) {
   const membership = await Membership.findOne({ circleId, userId }).session(
     session || null,
   );
-  const invited = await Invitation.exists({
-    circleId,
-    userId,
-    expiresAt: { $gt: new Date() },
-    acceptedAt: null,
-  }).session(session || null);
+  const invited =
+    membership?.state === "invited" &&
+    (await Invitation.exists({
+      circleId,
+      userId,
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null,
+      revokedAt: null,
+    }).session(session || null));
   if (
     !circle ||
     membership?.state === "banned" ||
@@ -180,14 +183,20 @@ export async function joinCircle(userId, circleId, session) {
       "REMOVAL_PENDING",
       "Wait for your previous membership to finish closing.",
     );
-  if (circle.visibility === "invite_only") {
-    const accepted = await Invitation.findOneAndUpdate(
-      { circleId, userId, expiresAt: { $gt: new Date() }, acceptedAt: null },
-      { $set: { acceptedAt: new Date() } },
-      { session, new: true },
-    );
-    if (!accepted) throw unavailable();
-  }
+  // Both listed and private invitations are consumed in the same transaction as
+  // the seat reservation. A full circle rolls this write back, leaving the invite usable.
+  const accepted = await Invitation.findOneAndUpdate(
+    {
+      circleId,
+      userId,
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null,
+      revokedAt: null,
+    },
+    { $set: { acceptedAt: new Date() } },
+    { session, new: true },
+  );
+  if (circle.visibility === "invite_only" && !accepted) throw unavailable();
   if (circle.seats >= 50)
     throw httpError(
       409,
@@ -220,6 +229,7 @@ export async function leaveCircle(userId, circleId, session) {
     membership.version++;
     await membership.save({ session });
   }
+  await revokeInvitation(circleId, userId, session);
   await changed(circle, session);
   await audit(userId, circle.id, "member.leave", userId, session);
   return circleView(circle, membership);
@@ -273,6 +283,8 @@ export async function manageMember(
           ? "banned"
           : "removing";
   }
+  if (["remove", "ban"].includes(body.action))
+    await revokeInvitation(circleId, targetId, session);
   target.version++;
   await target.save({ session });
   await changed(circle, session);
@@ -316,7 +328,9 @@ export async function invite(userId, circleId, targetId, session) {
   const expiresAt = new Date(Date.now() + 7 * 86400000);
   await Invitation.updateOne(
     { circleId, userId: targetId },
-    { $set: { invitedBy: userId, expiresAt, acceptedAt: null } },
+    {
+      $set: { invitedBy: userId, expiresAt, acceptedAt: null, revokedAt: null },
+    },
     { upsert: true, session },
   );
   await Membership.updateOne(
@@ -324,6 +338,10 @@ export async function invite(userId, circleId, targetId, session) {
     { $set: { state: "invited", role: "member" }, $inc: { version: 1 } },
     { upsert: true, session },
   );
+  // Writing the circle serializes this invitation with archival and role changes.
+  // Invites do not reserve seats or grant provider access.
+  circle.version++;
+  await circle.save({ session });
   await audit(userId, circle.id, "member.invite", targetId, session);
   return { circleId, userId: targetId, expiresAt };
 }
@@ -402,4 +420,27 @@ export async function memberList(userId, circleId) {
     state: m.state,
     version: m.version,
   }));
+}
+
+async function revokeInvitation(circleId, userId, session) {
+  await Invitation.updateOne(
+    { circleId, userId, acceptedAt: null },
+    { $set: { revokedAt: new Date(), expiresAt: new Date() } },
+    { session },
+  );
+}
+export async function pendingInvitations(userId, limit) {
+  const memberships = await Membership.find({
+    userId,
+    state: "invited",
+  }).select("circleId");
+  let query = Invitation.find({
+    userId,
+    circleId: { $in: memberships.map((m) => m.circleId) },
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  }).sort({ _id: -1 });
+  if (limit) query = query.limit(limit);
+  return query;
 }

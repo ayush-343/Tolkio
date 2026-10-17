@@ -68,8 +68,12 @@ export const Invitation = model(
     invitedBy: oid,
     expiresAt: Date,
     acceptedAt: Date,
+    revokedAt: Date,
   },
-  [[{ circleId: 1, userId: 1 }, { unique: true }]],
+  [
+    [{ circleId: 1, userId: 1 }, { unique: true }],
+    [{ userId: 1, acceptedAt: 1, expiresAt: 1 }, {}],
+  ],
 );
 export const AuditEvent = model("AuditEvent", {
   actorId: oid,

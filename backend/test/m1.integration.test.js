@@ -79,7 +79,9 @@ after(async () => {
   await mongoose.disconnect();
   await db?.stop();
 });
+let requestNetwork = 0;
 beforeEach(async () => {
+  requestNetwork++;
   await Promise.all([...communityModels, User].map((m) => m.deleteMany({})));
   channels.clear();
   [alice, bob, outsider] = await User.create(
@@ -107,6 +109,8 @@ const body = {
 };
 async function auth(user = alice) {
   const agent = request.agent(app);
+  // Isolate rate-limit accounting between scenarios without weakening production limits.
+  agent.set("X-Forwarded-For", `192.0.2.${requestNetwork}`);
   agent.jar.setCookie(
     `jwt=${jwt.sign({ userId: user.id }, process.env.JWT_SECRET_KEY)}`,
   );
@@ -774,16 +778,337 @@ test("staff can suspend and restore accounts independently of resolved reports",
   );
 });
 
-test('provider grant verification rejects inherited defaults and elevated client roles', async () => {
-  const { CIRCLE_GRANTS } = await import('../src/communities/provider.js');
-  const stub = mock.method(streamClient,'getChannelType',async () => ({ grants:CIRCLE_GRANTS }));
+test("provider grant verification rejects inherited defaults and elevated client roles", async () => {
+  const { CIRCLE_GRANTS } = await import("../src/communities/provider.js");
+  const stub = mock.method(streamClient, "getChannelType", async () => ({
+    grants: CIRCLE_GRANTS,
+  }));
   try {
     await verifyProviderGrants();
-    stub.mock.mockImplementation(async () => ({ grants:{ ...CIRCLE_GRANTS,user:['create-channel'] } }));
+    stub.mock.mockImplementation(async () => ({
+      grants: { ...CIRCLE_GRANTS, user: ["create-channel"] },
+    }));
     await assert.rejects(verifyProviderGrants());
-    stub.mock.mockImplementation(async () => ({ grants:{ ...CIRCLE_GRANTS,unexpected_owner:['read-channel'] } }));
+    stub.mock.mockImplementation(async () => ({
+      grants: { ...CIRCLE_GRANTS, unexpected_owner: ["read-channel"] },
+    }));
     await assert.rejects(verifyProviderGrants());
-    stub.mock.mockImplementation(async () => ({ grants:{ channel_member:CIRCLE_GRANTS.channel_member } }));
+    stub.mock.mockImplementation(async () => ({
+      grants: { channel_member: CIRCLE_GRANTS.channel_member },
+    }));
     await assert.rejects(verifyProviderGrants());
-  } finally { stub.mock.restore(); }
+  } finally {
+    stub.mock.restore();
+  }
+});
+
+test("HTTP invite → inbox → accept → worker → chat is backed by consistent Mongo records", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  const key = randomUUID(),
+    jobsBefore = await OutboxJob.countDocuments();
+  const invited = await write(
+    alice,
+    `/circles/${c.id}/invitations`,
+    { userId: bob.id },
+    "post",
+    key,
+  );
+  assert.equal(invited.status, 202);
+  const storedInvite = await Invitation.findOne({
+    circleId: c.id,
+    userId: bob.id,
+  });
+  const invitedMember = await Membership.findOne({
+    circleId: c.id,
+    userId: bob.id,
+  });
+  assert.equal(invitedMember.state, "invited");
+  assert.equal(invitedMember.role, "member");
+  assert.equal(storedInvite.invitedBy.toString(), alice.id);
+  assert.equal(storedInvite.acceptedAt, null);
+  assert.equal((await Circle.findById(c.id)).seats, 1);
+  assert.equal(await OutboxJob.countDocuments(), jobsBefore);
+  assert.equal(channels.get(c.channelId).has(bob.id), false);
+  const recipient = await auth(bob),
+    host = await auth(alice),
+    other = await auth(outsider);
+  const inbox = await recipient.agent
+    .get("/api/v1/community/invitations")
+    .expect(200);
+  assert.equal(inbox.body.data[0].circleId, c.id);
+  assert.deepEqual(
+    (await host.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  assert.deepEqual(
+    (await other.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  await recipient.agent.get(`/api/v1/circles/${c.id}/chat`).expect(404);
+  const joinKey = randomUUID();
+  const accepted = await write(
+    bob,
+    `/circles/${c.id}/join`,
+    {},
+    "post",
+    joinKey,
+  );
+  assert.equal(accepted.status, 202);
+  assert.equal(accepted.body.data.membership.state, "joining");
+  assert.ok(
+    (await Invitation.findById(storedInvite.id)).acceptedAt instanceof Date,
+  );
+  assert.equal((await Circle.findById(c.id)).seats, 2);
+  assert.equal(
+    await Membership.countDocuments({ circleId: c.id, userId: bob.id }),
+    1,
+  );
+  await recipient.agent.get(`/api/v1/circles/${c.id}/chat`).expect(404);
+  while (
+    await processCommunityJob({ sync: (id) => syncCircle(id, provider) })
+  ) {}
+  const member = await Membership.findOne({ circleId: c.id, userId: bob.id });
+  assert.equal(member.state, "active");
+  assert.equal(member.syncedVersion, member.version);
+  assert.equal(channels.get(c.channelId).has(bob.id), true);
+  await recipient.agent.get(`/api/v1/circles/${c.id}/chat`).expect(200);
+  assert.deepEqual(
+    (await recipient.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  assert.equal(
+    (await write(bob, `/circles/${c.id}/join`, {}, "post", joinKey)).status,
+    202,
+  );
+  assert.equal((await Circle.findById(c.id)).seats, 2);
+  assert.equal(
+    await AuditEvent.countDocuments({
+      circleId: c.id,
+      actorId: bob.id,
+      action: "member.join",
+    }),
+    1,
+  );
+});
+test("joining a listed circle consumes its invitation rather than leaving a stale inbox item", async () => {
+  const c = await circle();
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  await join(bob, c);
+  assert.ok(
+    (await Invitation.findOne({ circleId: c.id, userId: bob.id })).acceptedAt,
+  );
+  const { agent } = await auth(bob);
+  assert.deepEqual(
+    (await agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+});
+test("a full circle rolls back invitation acceptance, seat changes, membership, and jobs", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  await Circle.updateOne({ _id: c.id }, { $set: { seats: 50 } });
+  const beforeJobs = await OutboxJob.countDocuments(),
+    before = await Circle.findById(c.id);
+  assert.equal((await write(bob, `/circles/${c.id}/join`)).status, 409);
+  assert.equal(
+    (await Invitation.findOne({ circleId: c.id, userId: bob.id })).acceptedAt,
+    null,
+  );
+  assert.equal(
+    (await Membership.findOne({ circleId: c.id, userId: bob.id })).state,
+    "invited",
+  );
+  assert.equal((await Circle.findById(c.id)).syncVersion, before.syncVersion);
+  assert.equal((await Circle.findById(c.id)).seats, 50);
+  assert.equal(await OutboxJob.countDocuments(), beforeJobs);
+  const { agent } = await auth(bob);
+  assert.equal(
+    (await agent.get("/api/v1/community/invitations")).body.data.length,
+    1,
+  );
+});
+test("banning an invitee removes private metadata from the inbox and requires a fresh invite after unban", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  let member = await Membership.findOne({ circleId: c.id, userId: bob.id });
+  assert.equal(
+    (
+      await write(
+        alice,
+        `/circles/${c.id}/members/${bob.id}`,
+        { action: "ban", version: member.version },
+        "patch",
+      )
+    ).status,
+    202,
+  );
+  const recipient = await auth(bob);
+  assert.deepEqual(
+    (await recipient.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  await recipient.agent.get(`/api/v1/circles/${c.id}`).expect(404);
+  const stored = await Invitation.findOne({ circleId: c.id, userId: bob.id });
+  assert.ok(stored.revokedAt);
+  member = await Membership.findById(member.id);
+  await write(
+    alice,
+    `/circles/${c.id}/members/${bob.id}`,
+    { action: "unban", version: member.version },
+    "patch",
+  );
+  assert.equal((await write(bob, `/circles/${c.id}/join`)).status, 404);
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  await join(bob, c);
+  assert.equal((await Membership.findById(member.id)).state, "active");
+});
+test("concurrent accepts by the same invitee reserve exactly one seat and emit one join", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  const results = await Promise.all([
+    write(bob, `/circles/${c.id}/join`),
+    write(bob, `/circles/${c.id}/join`),
+  ]);
+  assert.ok(results.every((r) => r.status === 202));
+  assert.equal((await Circle.findById(c.id)).seats, 2);
+  assert.equal(
+    await Membership.countDocuments({ circleId: c.id, userId: bob.id }),
+    1,
+  );
+  assert.equal(
+    await AuditEvent.countDocuments({ circleId: c.id, action: "member.join" }),
+    1,
+  );
+});
+test("invite retries use one invitation and never reserve seats or create Stream access", async () => {
+  const c = await circle({ visibility: "invite_only" }),
+    key = randomUUID();
+  const first = await write(
+    alice,
+    `/circles/${c.id}/invitations`,
+    { userId: bob.id },
+    "post",
+    key,
+  );
+  const second = await write(
+    alice,
+    `/circles/${c.id}/invitations`,
+    { userId: bob.id },
+    "post",
+    key,
+  );
+  assert.equal(first.status, 202);
+  assert.deepEqual(first.body, second.body);
+  assert.equal(
+    await Invitation.countDocuments({ circleId: c.id, userId: bob.id }),
+    1,
+  );
+  assert.equal(
+    await Membership.countDocuments({ circleId: c.id, userId: bob.id }),
+    1,
+  );
+  assert.equal(
+    await AuditEvent.countDocuments({
+      circleId: c.id,
+      action: "member.invite",
+    }),
+    1,
+  );
+  assert.equal((await Circle.findById(c.id)).seats, 1);
+  assert.equal(channels.get(c.channelId).has(bob.id), false);
+});
+test("invite authorization, blocks, expiry, and archive are enforced in Mongo-backed APIs", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  assert.equal(
+    (await write(outsider, `/circles/${c.id}/invitations`, { userId: bob.id }))
+      .status,
+    404,
+  );
+  await User.updateOne({ _id: bob.id }, { $set: { blockedUsers: [alice.id] } });
+  assert.equal(
+    (await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id }))
+      .status,
+    404,
+  );
+  await User.updateOne({ _id: bob.id }, { $set: { blockedUsers: [] } });
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  const recipient = await auth(bob);
+  await Invitation.updateMany(
+    { circleId: c.id },
+    { $set: { expiresAt: new Date(0) } },
+  );
+  assert.deepEqual(
+    (await recipient.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  await recipient.agent.get(`/api/v1/circles/${c.id}`).expect(404);
+  await write(alice, `/circles/${c.id}/invitations`, { userId: bob.id });
+  const current = await Circle.findById(c.id);
+  await write(alice, `/circles/${c.id}/archive`, { version: current.version });
+  assert.deepEqual(
+    (await recipient.agent.get("/api/v1/community/invitations")).body.data,
+    [],
+  );
+  assert.equal((await write(bob, `/circles/${c.id}/join`)).status, 404);
+});
+test("an invitation racing with archive cannot commit into an archived circle", async () => {
+  const c = await circle({ visibility: "invite_only" });
+  let resume, ready;
+  const waiting = new Promise((resolve) => {
+    ready = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    resume = resolve;
+  });
+  const original = Circle.prototype.save;
+  let paused = false;
+  const stub = mock.method(Circle.prototype, "save", async function (...args) {
+    if (this.id === c.id && this.status === "active" && !paused) {
+      paused = true;
+      ready();
+      await gate;
+    }
+    return original.apply(this, args);
+  });
+  const invitation = service.transaction((s) =>
+    service.invite(alice.id, c.id, bob.id, s),
+  );
+  // Attach the rejection handler immediately; transaction retries should observe archival.
+  const rejected = assert.rejects(invitation, (error) => error.status === 404);
+  try {
+    await waiting;
+    await service.transaction((s) =>
+      service.editCircle(alice.id, c.id, { version: c.version }, s, true),
+    );
+    resume();
+    await rejected;
+    assert.equal(await Invitation.countDocuments({ circleId: c.id }), 0);
+    assert.equal(
+      await Membership.countDocuments({ circleId: c.id, userId: bob.id }),
+      0,
+    );
+    assert.equal((await Circle.findById(c.id)).status, "archived");
+  } finally {
+    resume();
+    stub.mock.restore();
+  }
+});
+test('provider admission failure keeps an accepted invitation pending until the durable job retries', async () => {
+  const c = await circle({ visibility:'invite_only' });
+  await OutboxJob.updateMany({ circleId:c.id },{ $set:{ status:'completed' } });
+  await write(alice,`/circles/${c.id}/invitations`,{ userId:bob.id });
+  await write(bob,`/circles/${c.id}/join`);
+  const failing = { ...provider,channel(id) { return { ...provider.channel(id),addMembers:async () => { throw new Error('Provider unavailable'); } }; },async ensure(circle) { return this.channel(circle.channelId); } };
+  await processCommunityJob({ sync:id => syncCircle(id,failing) });
+  assert.equal((await Membership.findOne({ circleId:c.id,userId:bob.id })).state,'joining');
+  assert.ok((await Invitation.findOne({ circleId:c.id,userId:bob.id })).acceptedAt);
+  assert.equal((await Circle.findById(c.id)).seats,2);
+  assert.equal(channels.get(c.channelId).has(bob.id),false);
+  const recipient = await auth(bob);await recipient.agent.get(`/api/v1/circles/${c.id}/chat`).expect(404);
+  const job = await OutboxJob.findOne({ circleId:c.id,status:'queued' });assert.ok(job);
+  await OutboxJob.updateOne({ _id:job.id },{ $set:{ nextRunAt:new Date(0) } });
+  await processCommunityJob({ sync:id => syncCircle(id,provider) });
+  assert.equal((await Membership.findOne({ circleId:c.id,userId:bob.id })).state,'active');
+  await recipient.agent.get(`/api/v1/circles/${c.id}/chat`).expect(200);
+  assert.equal((await Circle.findById(c.id)).seats,2);
 });
