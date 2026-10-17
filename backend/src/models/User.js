@@ -68,6 +68,13 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    safetyTargets: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
+    safetyVersion: { type:Number, default:0 },
+    safetySyncedVersion: { type:Number, default:0 },
+    safetyLeaseOwner: String,
+    safetyLeaseUntil: Date,
+    interests: { type: [String], default: [] },
+    availability: { type: [String], default: [] },
     accountStatus: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active' },
     blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     friends: [

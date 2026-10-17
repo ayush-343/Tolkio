@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import { communityModels } from './communities/models.js';
+import { assertReplicaSet } from './communities/service.js';
+import { circleProvider } from './communities/provider.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import mongoose from 'mongoose';
@@ -12,7 +15,11 @@ export async function startServer({ app = createApp(), connect = connectDB, port
     if (!process.env[key]) throw new Error(`Missing required configuration: ${key}`);
   }
   await connect();
-  await Promise.all([WebhookReceipt.init(), CommunicationOperation.init()]);
+  await Promise.all([WebhookReceipt.init(), CommunicationOperation.init(), ...communityModels.map(model => model.init())]);
+  if (process.env.COMMUNITY_ENABLED === "true") {
+    await assertReplicaSet();
+    await circleProvider.verify();
+  }
   const server = await new Promise((resolve, reject) => {
     const listener = app.listen(port, () => resolve(listener));
     listener.once('error', reject);

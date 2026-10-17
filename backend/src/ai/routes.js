@@ -1,4 +1,5 @@
 import express from 'express';
+import { communityCapabilities } from '../communities/policy.js';
 import mongoose from 'mongoose';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
@@ -8,7 +9,7 @@ import { AIJob, AIBudget } from './models.js';
 import { validateTask, validateOutput } from '../../../shared/ai/contracts.js';
 export const aiRoutes = express.Router();
 aiRoutes.use(protectRoute);
-aiRoutes.get('/capabilities', (req, res) => res.json({ data: capabilities(req.user.id) }));
+aiRoutes.get('/capabilities', (req, res) => res.json({ data: { ...capabilities(req.user.id), community: communityCapabilities(req.user) } }));
 aiRoutes.get('/ai/models', (_req, res, next) => { try { res.json({ data: catalog() }); } catch (e) { next(e); } });
 aiRoutes.post('/ai/validate-draft', (req, res) => {
   try {

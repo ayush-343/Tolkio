@@ -246,3 +246,12 @@ exposes runTask. Consolidate the documentation around the actual shared contract
 The next release should not be described as the planned community/learning
 platform until M0–M2 are implemented and verified. The accurate current label is
 existing direct communication app plus an experimental on-device AI Lab.
+
+## M1 implementation follow-up
+
+The original sections above are the pre-M0/M1 snapshot. Community models, APIs,
+transactional membership/outbox synchronization, group-chat pages, discovery,
+blocking, reporting, moderation, and group notification routing have since been
+implemented on staging. See [M1 implementation and release gates](m1-community.md)
+for the exact supported behavior and remaining real-provider/device verification.
+M2 learning workflows, M4 group sessions, and further AI work remain separate.
