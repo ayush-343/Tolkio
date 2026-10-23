@@ -1,4 +1,5 @@
 import express from 'express';
+import { communityRoutes } from './communities/routes.js';
 import dotenv from "dotenv";
 
 import cookieParser from "cookie-parser";
@@ -176,6 +177,7 @@ app.use("/api/chat", chatRoutes);
 // Versioned AI routes use the same cookie authentication and global CSRF policy.
 app.use("/api/v1", aiRoutes);
 app.use("/api/v1", communicationRoutes);
+app.use("/api/v1", communityRoutes);
 
 app.use('/api', (req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found.', requestId: req.requestId } }));
 app.use(errorHandler);
